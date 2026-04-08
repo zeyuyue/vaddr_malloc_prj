@@ -10,7 +10,7 @@
  */
 
 /*
- * @file:  ttosVaddrMalloc.h
+ * @file:  ttosVaddrAlloc.h
  * @brief:
  *       <li>虚拟地址空间分配器对外公共接口声明。</li>
  */
@@ -21,8 +21,8 @@
  *           供 RTOS 内核及驱动层调用。所有接口均操作内部全局 arena 实例。</li>
  */
 
-#ifndef TTOS_VADDR_MALLOC_H
-#define TTOS_VADDR_MALLOC_H
+#ifndef TTOS_VADDR_ALLOC_H
+#define TTOS_VADDR_ALLOC_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -152,4 +152,4 @@ void TTOS_FreeVaddr(void *addr, size_t size);
  */
 T_TTOS_ReturnCode TTOS_VaddrArenaStats(TTOS_VaddrStats *stats);
 
-#endif /* TTOS_VADDR_MALLOC_H */
+#endif /* TTOS_VADDR_ALLOC_H */

@@ -1,6 +1,6 @@
 #include <stdint.h>
 #include <stddef.h>
-#include "ttosVaddrMalloc.h"
+#include "ttosVaddrAlloc.h"
 #include "ttosTestFramework.h"
 
 #define ARENA_BASE  0x10000000UL

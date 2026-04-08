@@ -27,7 +27,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <pthread.h>
-#include "ttosVaddrMalloc.h"
+#include "ttosVaddrAlloc.h"
 
 /* -----------------------------------------------------------------------
  * 常量

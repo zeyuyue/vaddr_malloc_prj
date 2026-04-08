@@ -47,7 +47,7 @@
 |   TTOS_VaddrArenaInit()  TTOS_AllocVaddr()              |
 |   TTOS_FreeVaddr()       TTOS_VaddrArenaStats()          |
 +---------------------------┬------------------------------+
-                            │ 公共 API（ttosVaddrMalloc.h）
+                            │ 公共 API（ttosVaddrAlloc.h）
 +---------------------------▼------------------------------+
 |                     全局 arena 实例                       |
 |   g_vaddr_arena                                          |
@@ -395,7 +395,7 @@ TTOS_VaddrArenaDestroy();
 
 | 文件 | 说明 |
 |------|------|
-| `include/ttosVaddrMalloc.h` | 公共 API 声明，调用者只需包含此头文件 |
+| `include/ttosVaddrAlloc.h` | 公共 API 声明，调用者只需包含此头文件 |
 | `include/ttosVaddrInternal.h` | 内部类型定义（`arena_t`、`free_seg_t`、位图操作），仅 src/ 使用 |
 | `src/ttosVaddrArena.c` | arena 生命周期、节点池、段链表操作 |
 | `src/ttosVaddrAlloc.c` | `TTOS_AllocVaddr` / `TTOS_FreeVaddr` 实现 |

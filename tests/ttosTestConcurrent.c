@@ -1,7 +1,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <pthread.h>
-#include "ttosVaddrMalloc.h"
+#include "ttosVaddrAlloc.h"
 #include "ttosTestFramework.h"
 
 /* -----------------------------------------------------------------------
