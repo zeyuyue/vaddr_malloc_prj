@@ -1,0 +1,121 @@
+================================================================
+vaddr_malloc_prj — 设计文档
+================================================================
+
+项目概述
+--------
+vaddr_malloc_prj 是一个虚拟地址空间分配器，用于 x86 32位 RTOS 环境。
+它管理一段虚拟地址区间，提供页对齐的地址范围分配与释放，
+不涉及物理内存映射，返回的地址由 RTOS 内核负责建立页表映射。
+
+
+目录结构
+--------
+vaddr_malloc_prj/
+├── Makefile
+├── include/
+│   ├── vaddr_malloc.h      公共 API（TTOS_ 前缀）
+│   └── vaddr_internal.h    内部类型（_arena_t, _free_seg_t, bitmap helpers）
+├── src/
+│   ├── vaddr_arena.c       arena 生命周期 + 段链表操作
+│   └── vaddr_alloc.c       TTOS_MallocVaddr / TTOS_FreeVaddr
+├── tests/
+│   ├── test_framework.h    轻量测试宏
+│   ├── test_basic.c        基础用例（初始化、单次、批量、大块、OOM、碎片合并）
+│   └── test_concurrent.c   并发用例（多线程分配释放、地址无重叠）
+└── docs/
+    └── design.txt          本文件
+
+
+核心数据结构
+------------
+
+1. _arena_t（src/vaddr_internal.h）
+   管理整段虚拟地址空间 [base, base + total_pages * 4096)
+
+   字段：
+     base          虚拟地址起始（运行时传入，页对齐）
+     total_pages   总页数
+     bitmap        每页 1 bit，bit=1 表示已分配
+     bitmap_bytes  bitmap 字节数
+     seg_list      有序空闲段链表（按 start_page 升序）
+     free_pages    当前空闲页数（快速判断是否 OOM）
+     lock          pthread_mutex_t，保护所有字段
+
+2. _free_seg_t（src/vaddr_internal.h）
+   链表节点，表示一段连续的空闲页
+
+   字段：
+     start_page    空闲段起始页索引
+     page_count    连续空闲页数
+     prev / next   双向链表指针
+
+
+两级分配策略
+------------
+
+  分配路径    触发条件          搜索结构       算法
+  ---------------------------------------------------------------
+  小块路径    请求 < 16 页      bitmap         位图线性扫描，首次适配
+  大块路径    请求 >= 16 页     seg_list       链表线性遍历，首次适配
+
+小块路径说明：
+  bitmap_find_free_run() 扫描 bitmap，找到 n 个连续 0-bit 的起始位置，
+  再在 seg_list 中定位覆盖该区间的节点，三段切割（左余量、分配区、右余量）。
+
+大块路径说明：
+  seg_find_fit() 遍历 seg_list，找到第一个 page_count >= n 的节点，
+  从节点头部截取（seg_carve_front），剩余部分就地缩减或节点整体移除。
+
+两个结构始终同步：
+  每次 alloc/free 均同时更新 bitmap 和 seg_list，bitmap 是单页状态的唯一
+  真值来源，seg_list 提供大块快速查找与 free 时 O(1) 合并。
+
+
+释放与合并（Coalesce）
+----------------------
+TTOS_FreeVaddr 流程：
+  1. 将 [start_page, start_page+n) 在 bitmap 中清零
+  2. 创建新的 _free_seg_t 节点，插入 seg_list（保持升序）
+  3. 调用 seg_merge_adjacent()：
+       - 若 node.start + node.count == node.next.start，合并 next
+       - 若 node.prev.start + node.prev.count == node.start，合并 prev
+     合并后被消耗的节点立即 free()，保持链表紧凑
+
+
+线程安全
+--------
+整个 arena 使用一把 pthread_mutex_t 全局锁。
+所有 TTOS_MallocVaddr / TTOS_FreeVaddr / TTOS_VaddrArenaStats
+调用均在持锁期间完成，保证多任务环境下的原子性。
+
+并发测试（tests/test_concurrent.c）覆盖：
+  - 多线程交替 alloc/free，结束后 arena 全部归还
+  - 多线程先全部 alloc，屏障同步后再全部 free
+  - 多线程并发 alloc，验证返回地址无任何重叠
+
+
+关键约定
+--------
+  - 最小对齐：PAGE_SIZE = 4096（4K 页对齐）
+  - 请求大小不足一页时，内部向上取整到整页
+  - 失败返回 NULL，库代码不调用 abort/exit
+  - arena 结构体之外无全局可变状态
+  - 段链表节点通过 calloc/free 动态管理（可替换为 RTOS 固定内存池）
+
+
+公共 API 一览
+-------------
+  int   TTOS_VaddrArenaInit(TTOS_VaddrArena *out, uintptr_t base, size_t size)
+  void  TTOS_VaddrArenaDestroy(TTOS_VaddrArena arena)
+  void *TTOS_MallocVaddr(TTOS_VaddrArena arena, size_t size)
+  void  TTOS_FreeVaddr(TTOS_VaddrArena arena, void *addr, size_t size)
+  int   TTOS_VaddrArenaStats(TTOS_VaddrArena arena, TTOS_VaddrStats *stats)
+
+
+构建命令
+--------
+  make          构建 libvaddr.a
+  make test     构建并运行所有测试
+  make asan     开启 AddressSanitizer 后运行测试
+  make clean    清理 build/ 目录
