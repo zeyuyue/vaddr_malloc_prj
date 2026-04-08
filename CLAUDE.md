@@ -2,7 +2,7 @@
 
 ## 项目概述
 
-`vaddr_malloc_prj` 是一个虚拟地址空间内存分配器项目，设计并实现自定义 `vaddrAlloc`/`vaddrFree` 及虚拟地址管理
+`vaddr_malloc_prj` 是一个虚拟地址空间内存分配器项目，设计并实现自定义 `TTOS_AllocVaddr`/`TTOS_FreeVaddr` 及虚拟地址管理。
 
 ## 构建
 
@@ -19,17 +19,23 @@ make clean    # 清理产物
 - `tests/` — 单元测试与集成测试
 - `docs/` — 设计文档与参考资料
 
-## 文件命名
-
-文件名以 `ttos` 开头，采用小驼峰风格，例如：`ttosVaddrAlloc.c`、`ttosVaddrAlloc.h`。
-
 ## 代码风格
+
+### 基本规则
 
 - 语言：C（C11 标准）
 - 缩进：4 个空格，不使用 Tab
 - 头文件保护：`#ifndef PROJECT_FILE_H` / `#define PROJECT_FILE_H` / `#endif`
 - 函数保持简短、职责单一
 - 偏好显式而非隐式，避免晦涩的技巧性写法
+- 禁止使用 `goto` 语句
+- 注释使用中文
+
+### 文件命名与编码
+
+- 文件名以 `ttos` 开头，采用小驼峰风格，例如：`ttosVaddrAlloc.c`、`ttosVaddrAlloc.h`
+- 文件编码：UTF-8
+- 换行符：CRLF（Windows 风格）
 
 ### 命名规范
 
@@ -115,16 +121,13 @@ if (condition)
 - 使用 POSIX 及 pthread 接口，支持多任务并发
 - 错误处理：失败时返回 `NULL`，库代码禁止调用 `abort`/`exit`
 - 使用模块内全局 `arena_t` 变量管理虚拟地址空间，API 不通过参数传递句柄
-- 注释使用中文
-- 兼容32位和64位的RTOS
+- 兼容 32 位和 64 位的 RTOS
 - 实现逻辑中优先考虑确定性的实时性和多任务场景
-- 编码规则采用UTF-8
-- 换行符采用windows换行符 CRLF
 
 ## 文档约束
 
-- 生成文放在docs目录下
-- 将设计原理记录在md文件中，图文并茂，初级rtos工程师也能看明白
+- 生成的文档放在 `docs/` 目录下
+- 将设计原理记录在 md 文件中，图文并茂，初级 RTOS 工程师也能看明白
 
 ## 测试
 
@@ -133,3 +136,7 @@ if (condition)
 - 须覆盖多任务并发场景，使用 pthread 模拟
 - 提交前须通过 Valgrind / ASan 检查，不得有内存错误
 - 增加接口响应时间测试，目的是确定实时性
+
+## 工作流
+
+- 修改代码后执行 `git commit`，message 使用中文书写

@@ -164,6 +164,23 @@ void seg_merge_adjacent(arena_t *arena, free_seg_t *node)
 }
 
 /**
+ * @brief 释放 arena 内部已分配的资源并将结构体清零。
+ *        仅供 TTOS_VaddrArenaInit 初始化失败时的内部清理使用，
+ *        调用方须确保 mutex 已初始化时才传 mutex_inited = 1。
+ *
+ * @param[in,out]  arena         待清理的 arena。
+ * @param[in]      mutex_inited  mutex 是否已成功初始化（1：是，0：否）。
+ */
+static void arena_cleanup(arena_t *arena, int mutex_inited)
+{
+    if (mutex_inited)
+        pthread_mutex_destroy(&arena->lock);
+    free(arena->node_pool);
+    free(arena->bitmap);
+    memset(arena, 0, sizeof(arena_t));
+}
+
+/**
  * @brief 初始化全局虚拟地址 arena，管理 [base, base+size) 区间。
  *        base 和 size 均须按 PAGE_SIZE（4096）对齐。
  *        base 不得为 0（首页地址等于 NULL，与失败返回值冲突），
@@ -200,14 +217,20 @@ int TTOS_VaddrArenaInit(uintptr_t base, size_t size)
 
     g_vaddr_arena.bitmap = calloc(g_vaddr_arena.bitmap_bytes, 1);
     if (!g_vaddr_arena.bitmap)
-        goto fail_bitmap;
+    {
+        memset(&g_vaddr_arena, 0, sizeof(arena_t));
+        return -1;
+    }
 
     /* 预分配节点池：关键路径内取用/归还段节点均为 O(1)，不调用堆分配器 */
     g_vaddr_arena.node_pool_size = NODE_POOL_SIZE(g_vaddr_arena.total_pages);
     g_vaddr_arena.node_pool      = calloc(g_vaddr_arena.node_pool_size,
                                           sizeof(free_seg_t));
     if (!g_vaddr_arena.node_pool)
-        goto fail_pool;
+    {
+        arena_cleanup(&g_vaddr_arena, 0);
+        return -1;
+    }
 
     /* 将所有节点串成空闲链表 */
     for (size_t i = 0; i < g_vaddr_arena.node_pool_size - 1u; i++)
@@ -216,25 +239,21 @@ int TTOS_VaddrArenaInit(uintptr_t base, size_t size)
     g_vaddr_arena.node_free_list = &g_vaddr_arena.node_pool[0];
 
     if (pthread_mutex_init(&g_vaddr_arena.lock, NULL) != 0)
-        goto fail_mutex;
+    {
+        arena_cleanup(&g_vaddr_arena, 0);
+        return -1;
+    }
 
     /* 初始状态：整个 arena 是一个连续的空闲段 */
     free_seg_t *initial = seg_node_alloc(&g_vaddr_arena, 0, g_vaddr_arena.total_pages);
     if (!initial)
-        goto fail_seg;
+    {
+        arena_cleanup(&g_vaddr_arena, 1);
+        return -1;
+    }
 
     g_vaddr_arena.seg_list = initial;
     return 0;
-
-fail_seg:
-    pthread_mutex_destroy(&g_vaddr_arena.lock);
-fail_mutex:
-    free(g_vaddr_arena.node_pool);
-fail_pool:
-    free(g_vaddr_arena.bitmap);
-fail_bitmap:
-    memset(&g_vaddr_arena, 0, sizeof(arena_t));
-    return -1;
 }
 
 /**
