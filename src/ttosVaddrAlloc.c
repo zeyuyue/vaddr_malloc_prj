@@ -48,18 +48,31 @@ static size_t size_to_pages(size_t size)
 }
 
 /**
- * @brief 空闲段链表首次适配：找到第一个页数 >= n 的空闲段。
+ * @brief 空闲段链表对齐适配搜索：找到第一个能在 align_pages 对齐约束下
+ *        容纳 n 页的空闲段，并输出段内对齐起始页索引。
  *
- * @param[in]  list  有序空闲段链表表头。
- * @param[in]  n     所需最少页数。
+ * @param[in]   arena        所属 arena（用于计算绝对地址对齐）。
+ * @param[in]   n            所需最少页数。
+ * @param[in]   align_pages  对齐粒度（页数，须 >= 1）。
+ * @param[out]  out_start    满足对齐要求的起始页索引。
  * @return 满足条件的第一个段节点，不存在时返回 NULL。
  */
-static free_seg_t *seg_find_fit(free_seg_t *list, size_t n)
+static free_seg_t *seg_find_fit_aligned(arena_t *arena, size_t n, size_t align_pages,
+                                        size_t *out_start)
 {
-    for (free_seg_t *s = list; s; s = s->next)
+    size_t base_pages = arena->base >> PAGE_SHIFT;
+
+    for (free_seg_t *s = arena->seg_list; s; s = s->next)
     {
-        if (s->page_count >= n)
+        /* 计算段内第一个满足对齐要求的起始页 */
+        size_t offset = (base_pages + s->start_page) % align_pages;
+        size_t p      = s->start_page + (offset == 0u ? 0u : align_pages - offset);
+
+        if (p + n <= s->start_page + s->page_count)
+        {
+            *out_start = p;
             return s;
+        }
     }
     return NULL;
 }
@@ -91,47 +104,72 @@ static void bitmap_mark_free(uint8_t *bitmap, size_t start, size_t count)
 }
 
 /**
- * @brief 从段头部截取 n 页。段被完全消耗时从链表移除并归还节点池，
- *        否则就地缩减 start_page 和 page_count。
+ * @brief 从段的任意对齐位置截取 n 页，前后余量各自保留为独立空闲段。
+ *        先预取后部节点以保证操作原子性：若节点池耗尽则放弃本次操作，
+ *        位图与 seg_list 均不会被修改。
  *
- * @param[in,out]  arena  所属 arena。
- * @param[in,out]  seg    被截取的段节点。
- * @param[in]      n      截取页数。
- * @return 截取区域的起始页索引。
+ * @param[in,out]  arena       所属 arena。
+ * @param[in,out]  seg         被截取的段节点（须在链表中）。
+ * @param[in]      start_page  截取起始页（须在 seg 范围内）。
+ * @param[in]      n           截取页数。
+ * @return 0 成功；-1 节点池耗尽，状态未被修改。
  */
-static size_t seg_carve_front(arena_t *arena, free_seg_t *seg, size_t n)
+static int seg_carve_aligned(arena_t *arena, free_seg_t *seg,
+                              size_t start_page, size_t n)
 {
-    size_t start = seg->start_page;
+    size_t seg_end     = seg->start_page + seg->page_count;
+    size_t front_pages = start_page - seg->start_page;
+    size_t back_pages  = seg_end - (start_page + n);
+    free_seg_t *back   = NULL;
 
-    if (seg->page_count == n)
+    /* 预取后部节点，保证后续操作不会因节点耗尽而中途失败 */
+    if (back_pages > 0)
     {
-        seg_remove(arena, seg);
-        seg_node_free(arena, seg);
+        back = seg_node_alloc(arena, start_page + n, back_pages);
+        if (!back)
+            return -1;
+    }
+
+    seg_remove(arena, seg);
+
+    if (front_pages > 0)
+    {
+        /* 复用 seg 节点保留前部余量 */
+        seg->page_count = front_pages;
+        seg->prev       = NULL;
+        seg->next       = NULL;
+        seg_insert(arena, seg);
     }
     else
     {
-        seg->start_page += n;
-        seg->page_count -= n;
+        seg_node_free(arena, seg);
     }
 
-    return start;
+    if (back)
+        seg_insert(arena, back);
+
+    return 0;
 }
 
 /**
  * @brief 在全局 arena 中分配至少 size 字节的连续虚拟地址范围。
- *        通过段链表首次适配定位空闲区域，从段头部截取所需页数。
+ *        返回地址满足 align 对齐要求；size 在内部向上取整到页边界。
+ *        align 为 0 或小于 PAGE_SIZE 时退化为默认页对齐。
  *
- * @param[in]  size  请求字节数（内部向上取整到页边界）。
- * @return 分配到的虚拟地址起始值，失败返回 NULL。
+ * @param[in]  size   请求字节数（须大于 0，内部向上取整到页边界）。
+ * @param[in]  align  返回地址的对齐字节数（须为 PAGE_SIZE 的倍数，0 表示默认）。
+ * @return 分配到的虚拟地址起始值（满足对齐），失败返回 NULL。
  */
-void *TTOS_AllocVaddr(size_t size)
+void *TTOS_AllocVaddr(size_t size, size_t align)
 {
     arena_t *arena = &g_vaddr_arena;
 
     if (!arena->bitmap || size == 0)
         return NULL;
 
-    size_t n_pages = size_to_pages(size);
+    size_t n_pages     = size_to_pages(size);
+    /* align 为 0 或不足一页时退化为默认页对齐（align_pages = 1） */
+    size_t align_pages = (align <= PAGE_SIZE) ? 1u : (align >> PAGE_SHIFT);
 
     pthread_mutex_lock(&arena->lock);
 
@@ -142,15 +180,20 @@ void *TTOS_AllocVaddr(size_t size)
         return NULL;
     }
 
-    /* 段链表首次适配，统一处理所有大小的请求 */
-    free_seg_t *seg = seg_find_fit(arena->seg_list, n_pages);
+    size_t start_page;
+    free_seg_t *seg = seg_find_fit_aligned(arena, n_pages, align_pages, &start_page);
     if (!seg)
     {
         pthread_mutex_unlock(&arena->lock);
         return NULL;
     }
 
-    size_t start_page = seg_carve_front(arena, seg, n_pages);
+    if (seg_carve_aligned(arena, seg, start_page, n_pages) != 0)
+    {
+        pthread_mutex_unlock(&arena->lock);
+        return NULL;
+    }
+
     bitmap_mark_used(arena->bitmap, start_page, n_pages);
     arena->free_pages -= n_pages;
 

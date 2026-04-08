@@ -126,12 +126,14 @@ void TTOS_VaddrArenaDestroy(void);
 
 /**
  * @brief 在全局 arena 中分配至少 size 字节的连续虚拟地址范围。
- *        返回地址按 PAGE_SIZE 对齐，size 在内部向上取整到页边界。
+ *        返回地址满足 align 对齐要求；size 在内部向上取整到页边界。
+ *        align 为 0 或小于 PAGE_SIZE 时退化为默认页对齐。
  *
- * @param[in]  size  请求字节数（须大于 0）。
- * @return 分配到的虚拟地址起始值（页对齐），失败返回 NULL。
+ * @param[in]  size   请求字节数（须大于 0）。
+ * @param[in]  align  返回地址的对齐字节数（须为 PAGE_SIZE 的倍数，0 表示默认）。
+ * @return 分配到的虚拟地址起始值（满足对齐），失败返回 NULL。
  */
-void *TTOS_AllocVaddr(size_t size);
+void *TTOS_AllocVaddr(size_t size, size_t align);
 
 /**
  * @brief 释放之前由 TTOS_AllocVaddr 分配的虚拟地址范围。

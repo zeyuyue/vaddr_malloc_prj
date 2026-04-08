@@ -73,7 +73,7 @@ static void *t1_worker(void *arg)
     {
         /* 变化分配大小以覆盖小块和大块两条路径 */
         size_t pages = 1 + (size_t)(i % 32);
-        void *addr   = TTOS_AllocVaddr(pages * PAGE_SIZE);
+        void *addr   = TTOS_AllocVaddr(pages * PAGE_SIZE, 0);
         if (addr)
             TTOS_FreeVaddr(addr, pages * PAGE_SIZE);
     }
@@ -126,7 +126,7 @@ static void *t2_worker(void *arg)
     ta->alloc_count = 0;
     for (int i = 0; i < T2_ALLOCS_EACH; i++)
     {
-        void *a = TTOS_AllocVaddr(PAGE_SIZE);
+        void *a = TTOS_AllocVaddr(PAGE_SIZE, 0);
         if (a)
             ta->addrs[ta->alloc_count++] = a;
     }
@@ -207,7 +207,7 @@ static void *t3_worker(void *arg)
 
     for (int i = 0; i < T3_ALLOCS; i++)
     {
-        void *a = TTOS_AllocVaddr(2 * PAGE_SIZE);
+        void *a = TTOS_AllocVaddr(2 * PAGE_SIZE, 0);
         if (a)
         {
             ta->ranges[ta->count].start = (uintptr_t)a;
