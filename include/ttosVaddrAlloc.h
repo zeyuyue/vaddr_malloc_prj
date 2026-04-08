@@ -141,8 +141,14 @@ void *TTOS_AllocVaddr(size_t size, size_t align);
  *
  * @param[in]  addr  TTOS_AllocVaddr 返回的地址。
  * @param[in]  size  分配时传入的 size。
+ * @return 成功返回 TTOS_OK；
+ *         arena 未初始化返回 TTOS_INVALID_STATE；
+ *         addr 为 NULL 或地址非法返回 TTOS_INVALID_ADDRESS；
+ *         size 为 0 返回 TTOS_INVALID_SIZE；
+ *         检测到双重释放返回 TTOS_FAIL；
+ *         节点池耗尽（释放被放弃）返回 TTOS_UNSATISFIED。
  */
-void TTOS_FreeVaddr(void *addr, size_t size);
+T_TTOS_ReturnCode TTOS_FreeVaddr(void *addr, size_t size);
 
 /**
  * @brief 查询全局 arena 当前统计信息。

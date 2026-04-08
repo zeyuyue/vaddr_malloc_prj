@@ -194,7 +194,12 @@ if (condition)
 - 使用模块内全局 `arena_t` 变量管理虚拟地址空间，API 不通过参数传递句柄
 - 兼容 32 位和 64 位的 RTOS
 - 实现逻辑中优先考虑确定性的实时性和多任务场景
-- TTOS_AllocVaddr函数需要带两个参数，size 和 offset，分别表示分配大小和分配出来的地址对齐
+- `TTOS_AllocVaddr` 接口签名固定为 `void *TTOS_AllocVaddr(size_t size, size_t align)`，返回分配到的虚拟地址（失败返回 `NULL`），禁止修改为返回错误码或增减参数
+- `TTOS_AllocVaddr` 的 `align` 参数须为 `PAGE_SIZE`（4096）的 2 的幂次倍，或传 `0` 表示默认页对齐；不满足时返回 `NULL`
+
+## 工作流
+
+- 每次修改代码后必须执行 `git commit` 提交，message 使用中文书写
 
 ## 文档约束
 
@@ -209,6 +214,3 @@ if (condition)
 - 提交前须通过 Valgrind / ASan 检查，不得有内存错误
 - 增加接口响应时间测试，目的是确定实时性
 
-## 工作流
-
-- 修改代码后执行 `git commit`，message 使用中文书写

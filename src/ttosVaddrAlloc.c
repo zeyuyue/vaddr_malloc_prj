@@ -154,10 +154,11 @@ static int seg_carve_aligned(arena_t *arena, free_seg_t *seg,
 /**
  * @brief 在全局 arena 中分配至少 size 字节的连续虚拟地址范围。
  *        返回地址满足 align 对齐要求；size 在内部向上取整到页边界。
- *        align 为 0 或小于 PAGE_SIZE 时退化为默认页对齐。
+ *        align 为 0 或等于 PAGE_SIZE 时退化为默认页对齐。
+ *        align 非零时须为 PAGE_SIZE 的整数倍且为 2 的幂次，否则返回 NULL。
  *
  * @param[in]  size   请求字节数（须大于 0，内部向上取整到页边界）。
- * @param[in]  align  返回地址的对齐字节数（须为 PAGE_SIZE 的倍数，0 表示默认）。
+ * @param[in]  align  返回地址的对齐字节数（须为 PAGE_SIZE 的 2 幂次倍，0 表示默认）。
  * @return 分配到的虚拟地址起始值（满足对齐），失败返回 NULL。
  */
 void *TTOS_AllocVaddr(size_t size, size_t align)
@@ -167,8 +168,13 @@ void *TTOS_AllocVaddr(size_t size, size_t align)
     if (!arena->bitmap || size == 0)
         return NULL;
 
+    /* align 非零时须为 PAGE_SIZE 的整数倍且为 2 的幂次；
+     * 违反时直接返回 NULL，不做静默退化以免掩盖调用方错误。 */
+    if (align != 0 && (align < PAGE_SIZE || (align & (align - 1)) != 0))
+        return NULL;
+
     size_t n_pages     = size_to_pages(size);
-    /* align 为 0 或不足一页时退化为默认页对齐（align_pages = 1） */
+    /* align 为 0 或等于 PAGE_SIZE 时使用默认页对齐（align_pages = 1） */
     size_t align_pages = (align <= PAGE_SIZE) ? 1u : (align >> PAGE_SHIFT);
 
     pthread_mutex_lock(&arena->lock);
@@ -205,28 +211,40 @@ void *TTOS_AllocVaddr(size_t size, size_t align)
 /**
  * @brief 释放之前由 TTOS_AllocVaddr 分配的虚拟地址范围。
  *        addr 和 size 须与分配时完全一致，释放后自动合并相邻空闲段。
- *        检测双重释放：首页位图已为空闲时直接返回，不更新任何状态。
+ *        检测双重释放：范围内任意页位图已为空闲时返回 TTOS_FAIL。
  *        先取节点再更新状态，保证节点池耗尽时状态始终一致。
  *
  * @param[in]  addr  TTOS_AllocVaddr 返回的地址。
  * @param[in]  size  分配时传入的 size。
+ * @return 成功返回 TTOS_OK；
+ *         arena 未初始化返回 TTOS_INVALID_STATE；
+ *         addr 为 NULL 或地址非法返回 TTOS_INVALID_ADDRESS；
+ *         size 为 0 返回 TTOS_INVALID_SIZE；
+ *         检测到双重释放返回 TTOS_FAIL；
+ *         节点池耗尽（释放被放弃）返回 TTOS_UNSATISFIED。
  */
-void TTOS_FreeVaddr(void *addr, size_t size)
+T_TTOS_ReturnCode TTOS_FreeVaddr(void *addr, size_t size)
 {
     arena_t *arena = &g_vaddr_arena;
 
-    if (!arena->bitmap || !addr || size == 0)
-        return;
+    if (!arena->bitmap)
+        return TTOS_INVALID_STATE;
+
+    if (!addr)
+        return TTOS_INVALID_ADDRESS;
+
+    if (size == 0)
+        return TTOS_INVALID_SIZE;
 
     uintptr_t vaddr = (uintptr_t)addr;
     if (vaddr < arena->base || (vaddr & (PAGE_SIZE - 1)))
-        return;
+        return TTOS_INVALID_ADDRESS;
 
     size_t n_pages    = size_to_pages(size);
     size_t start_page = (vaddr - arena->base) >> PAGE_SHIFT;
 
     if (start_page + n_pages > arena->total_pages)
-        return;
+        return TTOS_INVALID_ADDRESS;
 
     pthread_mutex_lock(&arena->lock);
 
@@ -238,7 +256,7 @@ void TTOS_FreeVaddr(void *addr, size_t size)
         if (!bitmap_get(arena->bitmap, i))
         {
             pthread_mutex_unlock(&arena->lock);
-            return;
+            return TTOS_FAIL;
         }
     }
 
@@ -250,7 +268,7 @@ void TTOS_FreeVaddr(void *addr, size_t size)
     if (!node)
     {
         pthread_mutex_unlock(&arena->lock);
-        return;
+        return TTOS_UNSATISFIED;
     }
 
     bitmap_mark_free(arena->bitmap, start_page, n_pages);
@@ -260,4 +278,5 @@ void TTOS_FreeVaddr(void *addr, size_t size)
     /* node 可能已在 seg_merge_adjacent 内部归还节点池，此后不得再访问 */
 
     pthread_mutex_unlock(&arena->lock);
+    return TTOS_OK;
 }
