@@ -21,10 +21,10 @@ static void test_init_destroy(void)
     TEST_SUITE_BEGIN("init/destroy");
 
     /* 正常初始化 */
-    TEST_ASSERT(TTOS_VaddrArenaInit(ARENA_BASE, ARENA_SIZE) == 0);
+    TEST_ASSERT(TTOS_VaddrArenaInit(ARENA_BASE, ARENA_SIZE) == TTOS_OK);
 
     TTOS_VaddrStats stats;
-    TEST_ASSERT(TTOS_VaddrArenaStats(&stats) == 0);
+    TEST_ASSERT(TTOS_VaddrArenaStats(&stats) == TTOS_OK);
     TEST_ASSERT(stats.total_pages == ARENA_PAGES);
     TEST_ASSERT(stats.free_pages  == ARENA_PAGES);
     TEST_ASSERT(stats.used_pages  == 0);
@@ -32,23 +32,23 @@ static void test_init_destroy(void)
     TTOS_VaddrArenaDestroy();
 
     /* 基地址未对齐 */
-    TEST_ASSERT(TTOS_VaddrArenaInit(ARENA_BASE + 1, ARENA_SIZE) == -1);
+    TEST_ASSERT(TTOS_VaddrArenaInit(ARENA_BASE + 1, ARENA_SIZE) != TTOS_OK);
 
     /* 大小未对齐 */
-    TEST_ASSERT(TTOS_VaddrArenaInit(ARENA_BASE, ARENA_SIZE + 1) == -1);
+    TEST_ASSERT(TTOS_VaddrArenaInit(ARENA_BASE, ARENA_SIZE + 1) != TTOS_OK);
 
     /* 大小为零 */
-    TEST_ASSERT(TTOS_VaddrArenaInit(ARENA_BASE, 0) == -1);
+    TEST_ASSERT(TTOS_VaddrArenaInit(ARENA_BASE, 0) != TTOS_OK);
 
     /* base 为 0：首页地址 == NULL，与分配失败返回值冲突，须拒绝 */
-    TEST_ASSERT(TTOS_VaddrArenaInit(0, ARENA_SIZE) == -1);
+    TEST_ASSERT(TTOS_VaddrArenaInit(0, ARENA_SIZE) != TTOS_OK);
 
     /* base + size 回绕溢出（32/64 位均测试最大对齐地址） */
     uintptr_t max_page_aligned = ~(uintptr_t)0 - PAGE_SIZE + 1; /* 最高页对齐地址 */
-    TEST_ASSERT(TTOS_VaddrArenaInit(max_page_aligned, 2 * PAGE_SIZE) == -1);
+    TEST_ASSERT(TTOS_VaddrArenaInit(max_page_aligned, 2 * PAGE_SIZE) != TTOS_OK);
 
     /* 重新初始化应能成功 */
-    TEST_ASSERT(TTOS_VaddrArenaInit(ARENA_BASE, ARENA_SIZE) == 0);
+    TEST_ASSERT(TTOS_VaddrArenaInit(ARENA_BASE, ARENA_SIZE) == TTOS_OK);
     TTOS_VaddrArenaDestroy();
 }
 
@@ -228,14 +228,14 @@ static void test_null_guards(void)
     TTOS_FreeVaddr(NULL, PAGE_SIZE);
 
     /* stats 传 NULL 应返回 -1 */
-    TEST_ASSERT(TTOS_VaddrArenaStats(NULL) == -1);
+    TEST_ASSERT(TTOS_VaddrArenaStats(NULL) != TTOS_OK);
 
     TTOS_VaddrArenaDestroy();
 
     /* 销毁后再调用不应崩溃 */
     TTOS_VaddrArenaDestroy();
     TEST_ASSERT(TTOS_AllocVaddr(PAGE_SIZE) == NULL);
-    TEST_ASSERT(TTOS_VaddrArenaStats(NULL)  == -1);
+    TEST_ASSERT(TTOS_VaddrArenaStats(NULL)  != TTOS_OK);
 }
 
 static void test_double_free_basic(void)

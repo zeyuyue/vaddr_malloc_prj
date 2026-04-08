@@ -189,22 +189,25 @@ static void arena_cleanup(arena_t *arena, int mutex_inited)
  *
  * @param[in]  base  被管理区间的起始虚拟地址（须 > 0 且页对齐）。
  * @param[in]  size  区间总字节数（须页对齐，且 base+size 不得溢出）。
- * @return 成功返回 0，参数非法或内存不足返回 -1。
+ * @return 成功返回 TTOS_OK；
+ *         size 为 0 返回 TTOS_INVALID_SIZE；
+ *         base 或 size 未页对齐返回 TTOS_INVALID_ALIGNED；
+ *         base 为 0 或 base+size 溢出返回 TTOS_INVALID_ADDRESS；
+ *         内存不足返回 TTOS_UNSATISFIED；
+ *         内部资源初始化失败返回 TTOS_INTERNAL_ERROR。
  */
-int TTOS_VaddrArenaInit(uintptr_t base, size_t size)
+T_TTOS_ReturnCode TTOS_VaddrArenaInit(uintptr_t base, size_t size)
 {
-    if (size == 0 ||
-        (base & (PAGE_SIZE - 1)) ||
-        (size & (PAGE_SIZE - 1)))
-        return -1;
+    if (size == 0)
+        return TTOS_INVALID_SIZE;
+
+    if ((base & (PAGE_SIZE - 1)) || (size & (PAGE_SIZE - 1)))
+        return TTOS_INVALID_ALIGNED;
 
     /* base + size 不得回绕 uintptr_t，否则高地址页的虚拟地址会溢出为 0 */
-    if (base + size < base)
-        return -1;
-
     /* base 为 0 时首页地址 == NULL，与分配失败返回值冲突，须拒绝 */
-    if (base == 0)
-        return -1;
+    if (base == 0 || base + size < base)
+        return TTOS_INVALID_ADDRESS;
 
     /* 若已初始化则先清理，支持重新初始化 */
     if (g_vaddr_arena.bitmap)
@@ -219,7 +222,7 @@ int TTOS_VaddrArenaInit(uintptr_t base, size_t size)
     if (!g_vaddr_arena.bitmap)
     {
         memset(&g_vaddr_arena, 0, sizeof(arena_t));
-        return -1;
+        return TTOS_UNSATISFIED;
     }
 
     /* 预分配节点池：关键路径内取用/归还段节点均为 O(1)，不调用堆分配器 */
@@ -229,7 +232,7 @@ int TTOS_VaddrArenaInit(uintptr_t base, size_t size)
     if (!g_vaddr_arena.node_pool)
     {
         arena_cleanup(&g_vaddr_arena, 0);
-        return -1;
+        return TTOS_UNSATISFIED;
     }
 
     /* 将所有节点串成空闲链表 */
@@ -241,7 +244,7 @@ int TTOS_VaddrArenaInit(uintptr_t base, size_t size)
     if (pthread_mutex_init(&g_vaddr_arena.lock, NULL) != 0)
     {
         arena_cleanup(&g_vaddr_arena, 0);
-        return -1;
+        return TTOS_INTERNAL_ERROR;
     }
 
     /* 初始状态：整个 arena 是一个连续的空闲段 */
@@ -249,11 +252,11 @@ int TTOS_VaddrArenaInit(uintptr_t base, size_t size)
     if (!initial)
     {
         arena_cleanup(&g_vaddr_arena, 1);
-        return -1;
+        return TTOS_INTERNAL_ERROR;
     }
 
     g_vaddr_arena.seg_list = initial;
-    return 0;
+    return TTOS_OK;
 }
 
 /**
@@ -281,12 +284,17 @@ void TTOS_VaddrArenaDestroy(void)
  * @brief 查询全局 arena 当前统计信息。
  *
  * @param[out]  stats  接收当前页计数的结构体。
- * @return 成功返回 0，stats 为 NULL 或 arena 未初始化返回 -1。
+ * @return 成功返回 TTOS_OK；
+ *         stats 为 NULL 返回 TTOS_INVALID_ADDRESS；
+ *         arena 未初始化返回 TTOS_INVALID_STATE。
  */
-int TTOS_VaddrArenaStats(TTOS_VaddrStats *stats)
+T_TTOS_ReturnCode TTOS_VaddrArenaStats(TTOS_VaddrStats *stats)
 {
-    if (!stats || !g_vaddr_arena.bitmap)
-        return -1;
+    if (!stats)
+        return TTOS_INVALID_ADDRESS;
+
+    if (!g_vaddr_arena.bitmap)
+        return TTOS_INVALID_STATE;
 
     pthread_mutex_lock(&g_vaddr_arena.lock);
     stats->total_pages = g_vaddr_arena.total_pages;
@@ -294,5 +302,5 @@ int TTOS_VaddrArenaStats(TTOS_VaddrStats *stats)
     stats->used_pages  = g_vaddr_arena.total_pages - g_vaddr_arena.free_pages;
     pthread_mutex_unlock(&g_vaddr_arena.lock);
 
-    return 0;
+    return TTOS_OK;
 }

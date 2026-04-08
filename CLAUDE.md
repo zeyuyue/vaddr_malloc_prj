@@ -53,6 +53,78 @@ typedef struct rb_node
 } rb_node_t;
 ```
 
+### 函数返回码风格
+TTOS_前缀的给应用的函数使用该套返回码
+```c
+/* 所有API的返回值类型 */
+typedef enum
+{
+    /* 操作成功 */
+    TTOS_OK = 0,
+    /* 操作失败 */
+    TTOS_FAIL = 1,
+    /* 无效ID */
+    TTOS_INVALID_ID = 2,
+    /* 无效名字 */
+    TTOS_INVALID_NAME = 3,
+    /* 无效地址 */
+    TTOS_INVALID_ADDRESS = 4,
+    /* 无效时间 */
+    TTOS_INVALID_TIME = 5,
+    /* 无效状态 */
+    TTOS_INVALID_STATE = 6,
+    /* 无效动作 */
+    TTOS_INVALID_TYPE = 7,
+    /* 没有请求到资源 */
+    TTOS_UNSATISFIED = 8,
+    /*无效的用户*/
+    TTOS_INVALID_USER= 9,
+    /*在中断中处理程序中执行*/
+    TTOS_CALLED_FROM_ISR= 10,
+    /*无效的大小*/
+    TTOS_INVALID_SIZE =11,
+    /* 超时 */
+    TTOS_TIMEOUT = 12,
+    /* 内部错误*/
+    TTOS_INTERNAL_ERROR = 13,  
+    /*无效的对齐 */
+    TTOS_INVALID_ALIGNED = 14,
+    /* 数值无效 */
+    TTOS_INVALID_NUMBER = 15,  
+    /* 消息太多 */
+    TTOS_TOO_MANY = 16, 
+    /* 对象已经被删除了 */
+    TTOS_OBJECT_WAS_DELETED = 17,
+    /* 无效的属性 */
+    TTOS_INVALID_ATTRIBUTE = 18,
+    /*无效的优先级 */
+    TTOS_INVALID_PRIORITY = 19,
+    /* 非资源拥有者 */
+    TTOS_NOT_OWNER_OF_RESOURCE = 20,
+    /* 资源正在被使用中 */
+    TTOS_RESOURCE_IN_USE = 21,
+    /* 对象版本不匹配 */
+    TTOS_INVAILD_VERSION = 22,
+    /*操作被屏蔽*/
+    TTOS_MASKED = 23,    
+    /*无效的索引*/
+    TTOS_INVALID_INDEX = 24,    
+    /*无效的系统调用*/
+    TTOS_INVALID_SYSCALL = 25,    
+    /*不支持互斥信号量嵌套获取*/
+    TTOS_MUTEX_NESTING_NOT_ALLOWED = 26,  
+    /*尝试获取互斥信号量的任务优先级高于当前互斥信号量天花板优先级*/
+    TTOS_MUTEX_CEILING_VIOLATED = 27,  
+    /*互斥信号量嵌套层数超出最大允许值*/
+    TTOS_MUTEX_NEST_OVERFLOW = 28,  
+    /* 对象已经被取消了 */
+    TTOS_OBJECT_WAS_CANCELED = 29,
+    /* 等待对象被信号中断 */
+    TTOS_SIGNAL_INTR = 30,  
+}T_TTOS_ReturnCode;
+
+```
+
 ### 大括号风格
 
 使用 Allman 风格，所有大括号另起一行：
