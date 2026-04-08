@@ -124,7 +124,7 @@ static size_t seg_carve_front(arena_t *arena, free_seg_t *seg, size_t n)
  * @param[in]  size  请求字节数（内部向上取整到页边界）。
  * @return 分配到的虚拟地址起始值，失败返回 NULL。
  */
-void *TTOS_MallocVaddr(size_t size)
+void *TTOS_AllocVaddr(size_t size)
 {
     arena_t *arena = &g_vaddr_arena;
 
@@ -160,12 +160,12 @@ void *TTOS_MallocVaddr(size_t size)
 }
 
 /**
- * @brief 释放之前由 TTOS_MallocVaddr 分配的虚拟地址范围。
+ * @brief 释放之前由 TTOS_AllocVaddr 分配的虚拟地址范围。
  *        addr 和 size 须与分配时完全一致，释放后自动合并相邻空闲段。
  *        检测双重释放：首页位图已为空闲时直接返回，不更新任何状态。
  *        先取节点再更新状态，保证节点池耗尽时状态始终一致。
  *
- * @param[in]  addr  TTOS_MallocVaddr 返回的地址。
+ * @param[in]  addr  TTOS_AllocVaddr 返回的地址。
  * @param[in]  size  分配时传入的 size。
  */
 void TTOS_FreeVaddr(void *addr, size_t size)

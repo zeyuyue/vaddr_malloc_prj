@@ -44,7 +44,7 @@
 ```
 +----------------------------------------------------------+
 |                    调用者（驱动 / 内核）                   |
-|   TTOS_VaddrArenaInit()  TTOS_MallocVaddr()              |
+|   TTOS_VaddrArenaInit()  TTOS_AllocVaddr()              |
 |   TTOS_FreeVaddr()       TTOS_VaddrArenaStats()          |
 +---------------------------┬------------------------------+
                             │ 公共 API（ttosVaddrMalloc.h）
@@ -163,7 +163,7 @@ seg_carve_front()  从节点头部截取 n 页
 ## 5. 分配流程
 
 ```
-TTOS_MallocVaddr(size)
+TTOS_AllocVaddr(size)
         │
         ▼
   参数校验（bitmap 非空、size > 0）
@@ -324,7 +324,7 @@ node_free_list → [旧head] → ...
 所有公共 API 使用同一把 `pthread_mutex_t` 保护整个 arena：
 
 ```
-线程1: TTOS_MallocVaddr()     线程2: TTOS_FreeVaddr()
+线程1: TTOS_AllocVaddr()     线程2: TTOS_FreeVaddr()
           │                              │
           ▼                              ▼
      pthread_mutex_lock()          等待锁...
@@ -362,9 +362,9 @@ int  TTOS_VaddrArenaInit(uintptr_t base, size_t size);
 void TTOS_VaddrArenaDestroy(void);
 
 /* 分配至少 size 字节的连续虚拟地址，返回页对齐地址 */
-void *TTOS_MallocVaddr(size_t size);
+void *TTOS_AllocVaddr(size_t size);
 
-/* 释放 TTOS_MallocVaddr 分配的地址，addr 和 size 须与分配时一致 */
+/* 释放 TTOS_AllocVaddr 分配的地址，addr 和 size 须与分配时一致 */
 void TTOS_FreeVaddr(void *addr, size_t size);
 
 /* 查询统计信息（总页数、空闲页数、已用页数） */
@@ -378,7 +378,7 @@ int  TTOS_VaddrArenaStats(TTOS_VaddrStats *stats);
 TTOS_VaddrArenaInit(0x10000000UL, 1 * 1024 * 1024);
 
 /* 2. 分配 64 KB 连续虚拟地址 */
-void *vaddr = TTOS_MallocVaddr(64 * 1024);
+void *vaddr = TTOS_AllocVaddr(64 * 1024);
 
 /* 3. 使用该地址（由 RTOS 内核建立页表后可访问） */
 
@@ -398,7 +398,7 @@ TTOS_VaddrArenaDestroy();
 | `include/ttosVaddrMalloc.h` | 公共 API 声明，调用者只需包含此头文件 |
 | `include/ttosVaddrInternal.h` | 内部类型定义（`arena_t`、`free_seg_t`、位图操作），仅 src/ 使用 |
 | `src/ttosVaddrArena.c` | arena 生命周期、节点池、段链表操作 |
-| `src/ttosVaddrAlloc.c` | `TTOS_MallocVaddr` / `TTOS_FreeVaddr` 实现 |
+| `src/ttosVaddrAlloc.c` | `TTOS_AllocVaddr` / `TTOS_FreeVaddr` 实现 |
 | `tests/ttosTestBasic.c` | 基础功能测试（初始化、分配、释放、OOM、碎片合并） |
 | `tests/ttosTestConcurrent.c` | 并发测试（多线程交替操作、地址无重叠验证） |
 | `tests/ttosTestFramework.h` | 轻量测试宏 |

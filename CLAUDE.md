@@ -33,7 +33,7 @@ make clean    # 清理产物
 
 ### 命名规范
 
-- 对外公共 API：`TTOS_` 前缀 + 大驼峰，例如 `TTOS_MallocVaddr`
+- 对外公共 API：`TTOS_` 前缀 + 大驼峰，例如 `TTOS_AllocVaddr`
 - 内部模块函数：小驼峰，例如 `vaddrAlloc`
 - 局部变量：`snake_case`，例如 `block_size`
 - 宏和常量：`UPPER_CASE`，例如 `PAGE_SIZE_4K`

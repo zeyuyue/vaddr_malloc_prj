@@ -57,15 +57,15 @@ void TTOS_VaddrArenaDestroy(void);
  *        返回地址按 PAGE_SIZE 对齐，size 在内部向上取整到页边界。
  *
  * @param[in]  size  请求字节数（须大于 0）。
- * @return 分配到的虚拟地址起始值，失败返回 NULL。
+ * @return 分配到的虚拟地址起始值（页对齐），失败返回 NULL。
  */
-void *TTOS_MallocVaddr(size_t size);
+void *TTOS_AllocVaddr(size_t size);
 
 /**
- * @brief 释放之前由 TTOS_MallocVaddr 分配的虚拟地址范围。
+ * @brief 释放之前由 TTOS_AllocVaddr 分配的虚拟地址范围。
  *        addr 和 size 须与分配时完全一致。
  *
- * @param[in]  addr  TTOS_MallocVaddr 返回的地址。
+ * @param[in]  addr  TTOS_AllocVaddr 返回的地址。
  * @param[in]  size  分配时传入的 size。
  */
 void TTOS_FreeVaddr(void *addr, size_t size);
