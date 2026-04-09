@@ -55,21 +55,28 @@ static uint64_t now_ns(void)
 
 static void test_latency_sequential_alloc(void)
 {
+    void    *addrs[S1_COUNT];
+    uint64_t durations[S1_COUNT];
+    uint64_t total;
+    uint64_t min_ns;
+    uint64_t max_ns;
+    uint64_t t0;
+    uint64_t t1;
+    int      i;
+
     TEST_SUITE_BEGIN("latency: sequential alloc (best case)");
 
     TTOS_VaddrArenaInit(ARENA_BASE, ARENA_SIZE);
 
-    void    *addrs[S1_COUNT];
-    uint64_t durations[S1_COUNT];
-    uint64_t total = 0;
-    uint64_t min_ns = UINT64_MAX;
-    uint64_t max_ns = 0;
+    total  = 0;
+    min_ns = UINT64_MAX;
+    max_ns = 0;
 
-    for (int i = 0; i < S1_COUNT; i++)
+    for (i = 0; i < S1_COUNT; i++)
     {
-        uint64_t t0 = now_ns();
+        t0       = now_ns();
         addrs[i] = TTOS_AllocVaddr(PAGE_SIZE, 0);
-        uint64_t t1 = now_ns();
+        t1       = now_ns();
 
         TEST_ASSERT(addrs[i] != NULL);
         durations[i] = t1 - t0;
@@ -88,8 +95,10 @@ static void test_latency_sequential_alloc(void)
     TEST_ASSERT(total > 0);
 
     /* 清理 */
-    for (int i = 0; i < S1_COUNT; i++)
+    for (i = 0; i < S1_COUNT; i++)
+    {
         TTOS_FreeVaddr(addrs[i], PAGE_SIZE);
+    }
 
     TTOS_VaddrArenaDestroy();
 }
@@ -107,36 +116,46 @@ static void test_latency_sequential_alloc(void)
 
 static void test_latency_fragmented_alloc(void)
 {
+    void    *addrs[S2_TOTAL];
+    void    *measured[S2_MEASURE];
+    uint64_t total;
+    uint64_t min_ns;
+    uint64_t max_ns;
+    uint64_t t0;
+    uint64_t t1;
+    uint64_t d;
+    int      i;
+
     TEST_SUITE_BEGIN("latency: fragmented alloc (worst case)");
 
     TTOS_VaddrArenaInit(ARENA_BASE, ARENA_SIZE);
 
     /* 阶段一：逐页分配 */
-    void *addrs[S2_TOTAL];
-    for (int i = 0; i < S2_TOTAL; i++)
+    for (i = 0; i < S2_TOTAL; i++)
     {
         addrs[i] = TTOS_AllocVaddr(PAGE_SIZE, 0);
         TEST_ASSERT(addrs[i] != NULL);
     }
 
     /* 阶段二：释放偶数页，制造碎片 */
-    for (int i = 0; i < S2_TOTAL; i += 2)
+    for (i = 0; i < S2_TOTAL; i += 2)
+    {
         TTOS_FreeVaddr(addrs[i], PAGE_SIZE);
+    }
 
     /* 阶段三：在碎片化状态下分配 */
-    void    *measured[S2_MEASURE];
-    uint64_t total = 0;
-    uint64_t min_ns = UINT64_MAX;
-    uint64_t max_ns = 0;
+    total  = 0;
+    min_ns = UINT64_MAX;
+    max_ns = 0;
 
-    for (int i = 0; i < S2_MEASURE; i++)
+    for (i = 0; i < S2_MEASURE; i++)
     {
-        uint64_t t0 = now_ns();
+        t0          = now_ns();
         measured[i] = TTOS_AllocVaddr(PAGE_SIZE, 0);
-        uint64_t t1 = now_ns();
+        t1          = now_ns();
 
         TEST_ASSERT(measured[i] != NULL);
-        uint64_t d = t1 - t0;
+        d      = t1 - t0;
         total += d;
         if (d < min_ns) min_ns = d;
         if (d > max_ns) max_ns = d;
@@ -151,10 +170,14 @@ static void test_latency_fragmented_alloc(void)
     TEST_ASSERT(total > 0);
 
     /* 清理 */
-    for (int i = 0; i < S2_MEASURE; i++)
+    for (i = 0; i < S2_MEASURE; i++)
+    {
         TTOS_FreeVaddr(measured[i], PAGE_SIZE);
-    for (int i = 1; i < S2_TOTAL; i += 2)
+    }
+    for (i = 1; i < S2_TOTAL; i += 2)
+    {
         TTOS_FreeVaddr(addrs[i], PAGE_SIZE);
+    }
 
     TTOS_VaddrArenaDestroy();
 }
@@ -170,30 +193,41 @@ static void test_latency_fragmented_alloc(void)
 
 static void test_latency_free_coalesce(void)
 {
+    uint64_t total;
+    uint64_t min_ns;
+    uint64_t max_ns;
+    uint64_t t0;
+    uint64_t t1;
+    uint64_t d;
+    void    *a;
+    void    *b;
+    void    *c;
+    int      r;
+
     TEST_SUITE_BEGIN("latency: free with coalesce");
 
-    uint64_t total = 0;
-    uint64_t min_ns = UINT64_MAX;
-    uint64_t max_ns = 0;
+    total  = 0;
+    min_ns = UINT64_MAX;
+    max_ns = 0;
 
-    for (int r = 0; r < S3_ROUNDS; r++)
+    for (r = 0; r < S3_ROUNDS; r++)
     {
         TTOS_VaddrArenaInit(ARENA_BASE, ARENA_SIZE);
 
-        void *a = TTOS_AllocVaddr(4 * PAGE_SIZE, 0);
-        void *b = TTOS_AllocVaddr(4 * PAGE_SIZE, 0);
-        void *c = TTOS_AllocVaddr(4 * PAGE_SIZE, 0);
+        a = TTOS_AllocVaddr(4 * PAGE_SIZE, 0);
+        b = TTOS_AllocVaddr(4 * PAGE_SIZE, 0);
+        c = TTOS_AllocVaddr(4 * PAGE_SIZE, 0);
         TEST_ASSERT(a && b && c);
 
         TTOS_FreeVaddr(a, 4 * PAGE_SIZE);
         TTOS_FreeVaddr(c, 4 * PAGE_SIZE);
 
         /* 测量释放中间块（触发与前后合并） */
-        uint64_t t0 = now_ns();
+        t0 = now_ns();
         TTOS_FreeVaddr(b, 4 * PAGE_SIZE);
-        uint64_t t1 = now_ns();
+        t1 = now_ns();
 
-        uint64_t d = t1 - t0;
+        d      = t1 - t0;
         total += d;
         if (d < min_ns) min_ns = d;
         if (d > max_ns) max_ns = d;
@@ -221,23 +255,31 @@ static void test_latency_free_coalesce(void)
 
 static void test_latency_aligned_alloc(void)
 {
+    void    *addrs[S4_COUNT];
+    uint64_t total;
+    uint64_t min_ns;
+    uint64_t max_ns;
+    uint64_t t0;
+    uint64_t t1;
+    uint64_t d;
+    int      i;
+
     TEST_SUITE_BEGIN("latency: aligned alloc (16-page alignment)");
 
     TTOS_VaddrArenaInit(ARENA_BASE, ARENA_SIZE);
 
-    void    *addrs[S4_COUNT];
-    uint64_t total = 0;
-    uint64_t min_ns = UINT64_MAX;
-    uint64_t max_ns = 0;
+    total  = 0;
+    min_ns = UINT64_MAX;
+    max_ns = 0;
 
-    for (int i = 0; i < S4_COUNT; i++)
+    for (i = 0; i < S4_COUNT; i++)
     {
-        uint64_t t0 = now_ns();
+        t0       = now_ns();
         addrs[i] = TTOS_AllocVaddr(PAGE_SIZE, 16 * PAGE_SIZE);
-        uint64_t t1 = now_ns();
+        t1       = now_ns();
 
         TEST_ASSERT(addrs[i] != NULL);
-        uint64_t d = t1 - t0;
+        d      = t1 - t0;
         total += d;
         if (d < min_ns) min_ns = d;
         if (d > max_ns) max_ns = d;
@@ -251,8 +293,10 @@ static void test_latency_aligned_alloc(void)
 
     TEST_ASSERT(total > 0);
 
-    for (int i = 0; i < S4_COUNT; i++)
+    for (i = 0; i < S4_COUNT; i++)
+    {
         TTOS_FreeVaddr(addrs[i], PAGE_SIZE);
+    }
 
     TTOS_VaddrArenaDestroy();
 }

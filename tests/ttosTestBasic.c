@@ -18,12 +18,14 @@ static int in_arena(void *addr, size_t size)
 
 static void test_init_destroy(void)
 {
+    TTOS_VaddrStats stats;
+    uintptr_t       max_page_aligned;
+
     TEST_SUITE_BEGIN("init/destroy");
 
     /* 正常初始化 */
     TEST_ASSERT(TTOS_VaddrArenaInit(ARENA_BASE, ARENA_SIZE) == TTOS_OK);
 
-    TTOS_VaddrStats stats;
     TEST_ASSERT(TTOS_VaddrArenaStats(&stats) == TTOS_OK);
     TEST_ASSERT(stats.total_pages == ARENA_PAGES);
     TEST_ASSERT(stats.free_pages  == ARENA_PAGES);
@@ -44,7 +46,7 @@ static void test_init_destroy(void)
     TEST_ASSERT(TTOS_VaddrArenaInit(0, ARENA_SIZE) != TTOS_OK);
 
     /* base + size 回绕溢出（32/64 位均测试最大对齐地址） */
-    uintptr_t max_page_aligned = ~(uintptr_t)0 - PAGE_SIZE + 1; /* 最高页对齐地址 */
+    max_page_aligned = ~(uintptr_t)0 - PAGE_SIZE + 1; /* 最高页对齐地址 */
     TEST_ASSERT(TTOS_VaddrArenaInit(max_page_aligned, 2 * PAGE_SIZE) != TTOS_OK);
 
     /* 重新初始化应能成功 */
@@ -54,16 +56,17 @@ static void test_init_destroy(void)
 
 static void test_single_alloc_free(void)
 {
+    void          *addr;
+    TTOS_VaddrStats stats;
+
     TEST_SUITE_BEGIN("single alloc/free");
 
     TTOS_VaddrArenaInit(ARENA_BASE, ARENA_SIZE);
 
-    void *addr = TTOS_AllocVaddr(PAGE_SIZE, 0);
+    addr = TTOS_AllocVaddr(PAGE_SIZE, 0);
     TEST_ASSERT(addr != NULL);
     TEST_ASSERT((uintptr_t)addr % PAGE_SIZE == 0);
     TEST_ASSERT(in_arena(addr, PAGE_SIZE));
-
-    TTOS_VaddrStats stats;
     TTOS_VaddrArenaStats(&stats);
     TEST_ASSERT(stats.used_pages == 1);
     TEST_ASSERT(stats.free_pages == ARENA_PAGES - 1);
@@ -78,13 +81,17 @@ static void test_single_alloc_free(void)
 
 static void test_multi_alloc(void)
 {
+#define N 8
+    void          *addrs[N];
+    TTOS_VaddrStats stats;
+    int             i;
+    int             j;
+
     TEST_SUITE_BEGIN("multiple small allocs");
 
     TTOS_VaddrArenaInit(ARENA_BASE, ARENA_SIZE);
 
-#define N 8
-    void *addrs[N];
-    for (int i = 0; i < N; i++)
+    for (i = 0; i < N; i++)
     {
         addrs[i] = TTOS_AllocVaddr(PAGE_SIZE, 0);
         TEST_ASSERT(addrs[i] != NULL);
@@ -92,19 +99,22 @@ static void test_multi_alloc(void)
     }
 
     /* 所有地址必须唯一且页对齐 */
-    for (int i = 0; i < N; i++)
+    for (i = 0; i < N; i++)
     {
         TEST_ASSERT((uintptr_t)addrs[i] % PAGE_SIZE == 0);
-        for (int j = i + 1; j < N; j++)
+        for (j = i + 1; j < N; j++)
+        {
             TEST_ASSERT(addrs[i] != addrs[j]);
+        }
     }
 
-    TTOS_VaddrStats stats;
     TTOS_VaddrArenaStats(&stats);
     TEST_ASSERT(stats.used_pages == N);
 
-    for (int i = 0; i < N; i++)
+    for (i = 0; i < N; i++)
+    {
         TTOS_FreeVaddr(addrs[i], PAGE_SIZE);
+    }
 
     TTOS_VaddrArenaStats(&stats);
     TEST_ASSERT(stats.free_pages == ARENA_PAGES);
@@ -115,18 +125,19 @@ static void test_multi_alloc(void)
 
 static void test_large_alloc(void)
 {
+    size_t          large = 32 * PAGE_SIZE;
+    void           *addr;
+    TTOS_VaddrStats stats;
+
     TEST_SUITE_BEGIN("large alloc (>= 16 pages)");
 
     TTOS_VaddrArenaInit(ARENA_BASE, ARENA_SIZE);
 
     /* 32 页分配，触发大块路径 */
-    size_t large = 32 * PAGE_SIZE;
-    void *addr = TTOS_AllocVaddr(large, 0);
+    addr = TTOS_AllocVaddr(large, 0);
     TEST_ASSERT(addr != NULL);
     TEST_ASSERT((uintptr_t)addr % PAGE_SIZE == 0);
     TEST_ASSERT(in_arena(addr, large));
-
-    TTOS_VaddrStats stats;
     TTOS_VaddrArenaStats(&stats);
     TEST_ASSERT(stats.used_pages == 32);
 
@@ -139,15 +150,16 @@ static void test_large_alloc(void)
 
 static void test_size_rounding(void)
 {
+    void           *addr;
+    TTOS_VaddrStats stats;
+
     TEST_SUITE_BEGIN("size rounding to page boundary");
 
     TTOS_VaddrArenaInit(ARENA_BASE, ARENA_SIZE);
 
     /* 请求 1 字节，内部应向上取整为 1 页 */
-    void *addr = TTOS_AllocVaddr(1, 0);
+    addr = TTOS_AllocVaddr(1, 0);
     TEST_ASSERT(addr != NULL);
-
-    TTOS_VaddrStats stats;
     TTOS_VaddrArenaStats(&stats);
     TEST_ASSERT(stats.used_pages == 1);
 
@@ -160,21 +172,23 @@ static void test_size_rounding(void)
 
 static void test_oom(void)
 {
+    void           *full;
+    void           *extra;
+    TTOS_VaddrStats stats;
+
     TEST_SUITE_BEGIN("OOM - request exceeds available pages");
 
     TTOS_VaddrArenaInit(ARENA_BASE, ARENA_SIZE);
 
     /* 耗尽 arena */
-    void *full = TTOS_AllocVaddr(ARENA_SIZE, 0);
+    full = TTOS_AllocVaddr(ARENA_SIZE, 0);
     TEST_ASSERT(full != NULL);
 
     /* 再分配必须失败 */
-    void *extra = TTOS_AllocVaddr(PAGE_SIZE, 0);
+    extra = TTOS_AllocVaddr(PAGE_SIZE, 0);
     TEST_ASSERT(extra == NULL);
 
     TTOS_FreeVaddr(full, ARENA_SIZE);
-
-    TTOS_VaddrStats stats;
     TTOS_VaddrArenaStats(&stats);
     TEST_ASSERT(stats.free_pages == ARENA_PAGES);
 
@@ -183,14 +197,22 @@ static void test_oom(void)
 
 static void test_fragmentation_reuse(void)
 {
+    void           *a;
+    void           *b;
+    void           *c;
+    void           *d;
+    void           *e;
+    void           *f;
+    TTOS_VaddrStats stats;
+
     TEST_SUITE_BEGIN("fragmentation and coalesce");
 
     TTOS_VaddrArenaInit(ARENA_BASE, ARENA_SIZE);
 
-    void *a = TTOS_AllocVaddr(4 * PAGE_SIZE, 0);
-    void *b = TTOS_AllocVaddr(4 * PAGE_SIZE, 0);
-    void *c = TTOS_AllocVaddr(4 * PAGE_SIZE, 0);
-    void *d = TTOS_AllocVaddr(4 * PAGE_SIZE, 0);
+    a = TTOS_AllocVaddr(4 * PAGE_SIZE, 0);
+    b = TTOS_AllocVaddr(4 * PAGE_SIZE, 0);
+    c = TTOS_AllocVaddr(4 * PAGE_SIZE, 0);
+    d = TTOS_AllocVaddr(4 * PAGE_SIZE, 0);
     TEST_ASSERT(a && b && c && d);
 
     /* 释放交替块制造碎片 */
@@ -198,8 +220,8 @@ static void test_fragmentation_reuse(void)
     TTOS_FreeVaddr(c, 4 * PAGE_SIZE);
 
     /* 能够重新分配到已释放的空洞 */
-    void *e = TTOS_AllocVaddr(4 * PAGE_SIZE, 0);
-    void *f = TTOS_AllocVaddr(4 * PAGE_SIZE, 0);
+    e = TTOS_AllocVaddr(4 * PAGE_SIZE, 0);
+    f = TTOS_AllocVaddr(4 * PAGE_SIZE, 0);
     TEST_ASSERT(e != NULL);
     TEST_ASSERT(f != NULL);
 
@@ -207,8 +229,6 @@ static void test_fragmentation_reuse(void)
     TTOS_FreeVaddr(d, 4 * PAGE_SIZE);
     TTOS_FreeVaddr(e, 4 * PAGE_SIZE);
     TTOS_FreeVaddr(f, 4 * PAGE_SIZE);
-
-    TTOS_VaddrStats stats;
     TTOS_VaddrArenaStats(&stats);
     TEST_ASSERT(stats.free_pages == ARENA_PAGES);
 
@@ -240,18 +260,20 @@ static void test_null_guards(void)
 
 static void test_double_free_basic(void)
 {
+    void           *a;
+    TTOS_VaddrStats stats;
+    size_t          free_after_first;
+
     TEST_SUITE_BEGIN("double free - basic detection");
 
     TTOS_VaddrArenaInit(ARENA_BASE, ARENA_SIZE);
 
-    void *a = TTOS_AllocVaddr(PAGE_SIZE, 0);
+    a = TTOS_AllocVaddr(PAGE_SIZE, 0);
     TEST_ASSERT(a != NULL);
 
     TTOS_FreeVaddr(a, PAGE_SIZE);
-
-    TTOS_VaddrStats stats;
     TTOS_VaddrArenaStats(&stats);
-    size_t free_after_first = stats.free_pages;
+    free_after_first = stats.free_pages;
 
     /* 双重释放：应被检测到，返回 TTOS_FAIL，free_pages 不应变化 */
     TEST_ASSERT(TTOS_FreeVaddr(a, PAGE_SIZE) == TTOS_FAIL);
@@ -263,6 +285,11 @@ static void test_double_free_basic(void)
 
 static void test_double_free_partial_overlap(void)
 {
+    void           *a;
+    void           *b;
+    TTOS_VaddrStats stats;
+    size_t          free_before;
+
     TEST_SUITE_BEGIN("double free - partial overlap detection");
 
     TTOS_VaddrArenaInit(ARENA_BASE, ARENA_SIZE);
@@ -275,17 +302,16 @@ static void test_double_free_partial_overlap(void)
      * 4. 对 a 做双重释放 — 首页已被 b 占用(bit=1)，
      *    但第二页已空闲(bit=0)，全页校验应拒绝
      */
-    void *a = TTOS_AllocVaddr(2 * PAGE_SIZE, 0);
+    a = TTOS_AllocVaddr(2 * PAGE_SIZE, 0);
     TEST_ASSERT(a != NULL);
 
     TTOS_FreeVaddr(a, 2 * PAGE_SIZE);
 
-    void *b = TTOS_AllocVaddr(PAGE_SIZE, 0);
+    b = TTOS_AllocVaddr(PAGE_SIZE, 0);
     TEST_ASSERT(b != NULL);
 
-    TTOS_VaddrStats stats;
     TTOS_VaddrArenaStats(&stats);
-    size_t free_before = stats.free_pages;
+    free_before = stats.free_pages;
 
     /* 对 a 做双重释放，应被拒绝，返回 TTOS_FAIL */
     TEST_ASSERT(TTOS_FreeVaddr(a, 2 * PAGE_SIZE) == TTOS_FAIL);
@@ -302,16 +328,19 @@ static void test_double_free_partial_overlap(void)
 
 static void test_free_misaligned_addr(void)
 {
+    void           *a;
+    TTOS_VaddrStats stats;
+    size_t          free_before;
+
     TEST_SUITE_BEGIN("free with misaligned/out-of-range address");
 
     TTOS_VaddrArenaInit(ARENA_BASE, ARENA_SIZE);
 
-    void *a = TTOS_AllocVaddr(PAGE_SIZE, 0);
+    a = TTOS_AllocVaddr(PAGE_SIZE, 0);
     TEST_ASSERT(a != NULL);
 
-    TTOS_VaddrStats stats;
     TTOS_VaddrArenaStats(&stats);
-    size_t free_before = stats.free_pages;
+    free_before = stats.free_pages;
 
     /* 未对齐地址：应返回 TTOS_INVALID_ADDRESS */
     TEST_ASSERT(TTOS_FreeVaddr((void *)((uintptr_t)a + 1), PAGE_SIZE) == TTOS_INVALID_ADDRESS);
@@ -334,38 +363,45 @@ static void test_free_misaligned_addr(void)
 
 static void test_exhaust_and_recover(void)
 {
+    void           *addrs[ARENA_PAGES];
+    size_t          allocated;
+    size_t          i;
+    TTOS_VaddrStats stats;
+    void           *full;
+
     TEST_SUITE_BEGIN("exhaust all pages then recover");
 
     TTOS_VaddrArenaInit(ARENA_BASE, ARENA_SIZE);
 
     /* 逐页分配直到耗尽 */
-    void *addrs[ARENA_PAGES];
-    size_t allocated = 0;
-    for (size_t i = 0; i < ARENA_PAGES; i++)
+    allocated = 0;
+    for (i = 0; i < ARENA_PAGES; i++)
     {
         addrs[i] = TTOS_AllocVaddr(PAGE_SIZE, 0);
         if (!addrs[i])
+        {
             break;
+        }
         allocated++;
     }
     TEST_ASSERT(allocated == ARENA_PAGES);
 
     /* 耗尽后再分配必须失败 */
     TEST_ASSERT(TTOS_AllocVaddr(PAGE_SIZE, 0) == NULL);
-
-    TTOS_VaddrStats stats;
     TTOS_VaddrArenaStats(&stats);
     TEST_ASSERT(stats.free_pages == 0);
 
     /* 逐页释放 */
-    for (size_t i = 0; i < allocated; i++)
+    for (i = 0; i < allocated; i++)
+    {
         TTOS_FreeVaddr(addrs[i], PAGE_SIZE);
+    }
 
     TTOS_VaddrArenaStats(&stats);
     TEST_ASSERT(stats.free_pages == ARENA_PAGES);
 
     /* 释放后应能重新分配整个 arena */
-    void *full = TTOS_AllocVaddr(ARENA_SIZE, 0);
+    full = TTOS_AllocVaddr(ARENA_SIZE, 0);
     TEST_ASSERT(full != NULL);
     TTOS_FreeVaddr(full, ARENA_SIZE);
 
@@ -374,14 +410,20 @@ static void test_exhaust_and_recover(void)
 
 static void test_coalesce_three_way(void)
 {
+    void           *a;
+    void           *b;
+    void           *c;
+    void           *big;
+    TTOS_VaddrStats stats;
+
     TEST_SUITE_BEGIN("three-way coalesce on free");
 
     TTOS_VaddrArenaInit(ARENA_BASE, ARENA_SIZE);
 
     /* 分配三个相邻块 */
-    void *a = TTOS_AllocVaddr(4 * PAGE_SIZE, 0);
-    void *b = TTOS_AllocVaddr(4 * PAGE_SIZE, 0);
-    void *c = TTOS_AllocVaddr(4 * PAGE_SIZE, 0);
+    a = TTOS_AllocVaddr(4 * PAGE_SIZE, 0);
+    b = TTOS_AllocVaddr(4 * PAGE_SIZE, 0);
+    c = TTOS_AllocVaddr(4 * PAGE_SIZE, 0);
     TEST_ASSERT(a && b && c);
 
     /* 先释放两端 */
@@ -392,12 +434,10 @@ static void test_coalesce_three_way(void)
     TTOS_FreeVaddr(b, 4 * PAGE_SIZE);
 
     /* 合并后应能一次性分配 12 页 */
-    void *big = TTOS_AllocVaddr(12 * PAGE_SIZE, 0);
+    big = TTOS_AllocVaddr(12 * PAGE_SIZE, 0);
     TEST_ASSERT(big != NULL);
 
     TTOS_FreeVaddr(big, 12 * PAGE_SIZE);
-
-    TTOS_VaddrStats stats;
     TTOS_VaddrArenaStats(&stats);
     TEST_ASSERT(stats.free_pages == ARENA_PAGES);
 
@@ -412,6 +452,13 @@ static void test_coalesce_three_way(void)
  */
 static void test_align_param(void)
 {
+    TTOS_VaddrStats stats;
+    void           *a0;
+    void           *a1;
+    void           *a2;
+    void           *a4;
+    void           *a16;
+
     TEST_SUITE_BEGIN("align param validation and address alignment");
 
     TTOS_VaddrArenaInit(ARENA_BASE, ARENA_SIZE);
@@ -432,38 +479,37 @@ static void test_align_param(void)
     TEST_ASSERT(TTOS_AllocVaddr(PAGE_SIZE, 6 * PAGE_SIZE)  == NULL);
 
     /* arena 未被消耗 */
-    TTOS_VaddrStats stats;
     TTOS_VaddrArenaStats(&stats);
     TEST_ASSERT(stats.used_pages == 0);
 
     /* --- 合法 align：地址须满足对齐要求 --- */
 
     /* align = 0：退化为页对齐 */
-    void *a0 = TTOS_AllocVaddr(PAGE_SIZE, 0);
+    a0 = TTOS_AllocVaddr(PAGE_SIZE, 0);
     TEST_ASSERT(a0 != NULL);
     TEST_ASSERT((uintptr_t)a0 % PAGE_SIZE == 0);
     TTOS_FreeVaddr(a0, PAGE_SIZE);
 
     /* align = PAGE_SIZE：与默认等价 */
-    void *a1 = TTOS_AllocVaddr(PAGE_SIZE, PAGE_SIZE);
+    a1 = TTOS_AllocVaddr(PAGE_SIZE, PAGE_SIZE);
     TEST_ASSERT(a1 != NULL);
     TEST_ASSERT((uintptr_t)a1 % PAGE_SIZE == 0);
     TTOS_FreeVaddr(a1, PAGE_SIZE);
 
     /* align = 2 * PAGE_SIZE */
-    void *a2 = TTOS_AllocVaddr(PAGE_SIZE, 2 * PAGE_SIZE);
+    a2 = TTOS_AllocVaddr(PAGE_SIZE, 2 * PAGE_SIZE);
     TEST_ASSERT(a2 != NULL);
     TEST_ASSERT((uintptr_t)a2 % (2 * PAGE_SIZE) == 0);
     TTOS_FreeVaddr(a2, PAGE_SIZE);
 
     /* align = 4 * PAGE_SIZE */
-    void *a4 = TTOS_AllocVaddr(PAGE_SIZE, 4 * PAGE_SIZE);
+    a4 = TTOS_AllocVaddr(PAGE_SIZE, 4 * PAGE_SIZE);
     TEST_ASSERT(a4 != NULL);
     TEST_ASSERT((uintptr_t)a4 % (4 * PAGE_SIZE) == 0);
     TTOS_FreeVaddr(a4, PAGE_SIZE);
 
     /* align = 16 * PAGE_SIZE */
-    void *a16 = TTOS_AllocVaddr(PAGE_SIZE, 16 * PAGE_SIZE);
+    a16 = TTOS_AllocVaddr(PAGE_SIZE, 16 * PAGE_SIZE);
     TEST_ASSERT(a16 != NULL);
     TEST_ASSERT((uintptr_t)a16 % (16 * PAGE_SIZE) == 0);
     TTOS_FreeVaddr(a16, PAGE_SIZE);

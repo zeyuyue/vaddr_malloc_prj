@@ -145,7 +145,7 @@ seg_find_fit(seg_list, n_pages)
 遍历有序空闲段链表，找第一个 page_count ≥ n 的节点
     │
     ▼
-seg_carve_front()  从节点头部截取 n 页
+seg_carve_aligned()  从节点的对齐位置截取 n 页
 ```
 
 | 操作 | 搜索结构 | 时间复杂度 |
@@ -185,12 +185,12 @@ TTOS_AllocVaddr(size)
   找不到？ ──→ 解锁，返回 NULL
         │
         ▼
-  seg_carve_front(arena, seg, n_pages)  从节点头部截取：
-  ┌──────────────────────────────────────┐
-  │  [  分配区  ][      剩余空闲        ]│
-  │  ↑截走         ↑节点缩减就地保留    │
-  └──────────────────────────────────────┘
-  若节点被完全消耗，从链表移除并归还节点池
+  seg_carve_aligned(arena, seg, start_page, n_pages)  从对齐位置截取：
+  ┌──────────────────────────────────────────────────┐
+  │  [ 前部余量 ][    分配区    ][ 后部余量 ]        │
+  │  ↑保留为新段  ↑截走           ↑保留为新段        │
+  └──────────────────────────────────────────────────┘
+  前/后余量各自作为独立空闲段保留；节点完全消耗时归还节点池
         │
         ▼
   bitmap_mark_used()  位图对应位置 1
@@ -356,19 +356,20 @@ node_free_list → [旧head] → ...
 ```c
 /* 初始化全局 arena，管理 [base, base+size) 的虚拟地址区间
  * base > 0 且页对齐，base+size 不得溢出 */
-int  TTOS_VaddrArenaInit(uintptr_t base, size_t size);
+T_TTOS_ReturnCode TTOS_VaddrArenaInit(uintptr_t base, size_t size);
 
 /* 销毁 arena，释放所有内部元数据 */
 void TTOS_VaddrArenaDestroy(void);
 
-/* 分配至少 size 字节的连续虚拟地址，返回页对齐地址 */
-void *TTOS_AllocVaddr(size_t size);
+/* 分配至少 size 字节、满足 align 对齐的连续虚拟地址
+ * align 须为 PAGE_SIZE 的 2 的幂次倍，0 表示默认页对齐，不满足返回 NULL */
+void *TTOS_AllocVaddr(size_t size, size_t align);
 
-/* 释放 TTOS_AllocVaddr 分配的地址，addr 和 size 须与分配时一致 */
-void TTOS_FreeVaddr(void *addr, size_t size);
+/* 释放 TTOS_AllocVaddr 分配的地址，addr 和 size 须与分配时完全一致 */
+T_TTOS_ReturnCode TTOS_FreeVaddr(void *addr, size_t size);
 
 /* 查询统计信息（总页数、空闲页数、已用页数） */
-int  TTOS_VaddrArenaStats(TTOS_VaddrStats *stats);
+T_TTOS_ReturnCode TTOS_VaddrArenaStats(TTOS_VaddrStats *stats);
 ```
 
 典型使用流程：
@@ -377,8 +378,8 @@ int  TTOS_VaddrArenaStats(TTOS_VaddrStats *stats);
 /* 1. 初始化：将 0x10000000 起的 1 MB 虚拟地址交给 arena 管理 */
 TTOS_VaddrArenaInit(0x10000000UL, 1 * 1024 * 1024);
 
-/* 2. 分配 64 KB 连续虚拟地址 */
-void *vaddr = TTOS_AllocVaddr(64 * 1024);
+/* 2. 分配 64 KB 连续虚拟地址（默认页对齐） */
+void *vaddr = TTOS_AllocVaddr(64 * 1024, 0);
 
 /* 3. 使用该地址（由 RTOS 内核建立页表后可访问） */
 

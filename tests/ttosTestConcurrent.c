@@ -82,17 +82,23 @@ static void *t1_worker(void *arg)
 
 static void test_concurrent_alloc_free(void)
 {
+    pthread_t       threads[T1_THREADS];
+    TTOS_VaddrStats stats;
+    int             i;
+
     TEST_SUITE_BEGIN("concurrent alloc-free loop");
 
     TEST_ASSERT(TTOS_VaddrArenaInit(ARENA_BASE, ARENA_SIZE) == 0);
 
-    pthread_t threads[T1_THREADS];
-    for (int i = 0; i < T1_THREADS; i++)
+    for (i = 0; i < T1_THREADS; i++)
+    {
         pthread_create(&threads[i], NULL, t1_worker, NULL);
-    for (int i = 0; i < T1_THREADS; i++)
+    }
+    for (i = 0; i < T1_THREADS; i++)
+    {
         pthread_join(threads[i], NULL);
+    }
 
-    TTOS_VaddrStats stats;
     TTOS_VaddrArenaStats(&stats);
     TEST_ASSERT(stats.free_pages == ARENA_PAGES);
     TEST_ASSERT(stats.used_pages == 0);
@@ -121,55 +127,67 @@ typedef struct
 static void *t2_worker(void *arg)
 {
     t2_thread_arg_t *ta = (t2_thread_arg_t *)arg;
+    void            *a;
+    int              i;
 
     /* 阶段一：分配 */
     ta->alloc_count = 0;
-    for (int i = 0; i < T2_ALLOCS_EACH; i++)
+    for (i = 0; i < T2_ALLOCS_EACH; i++)
     {
-        void *a = TTOS_AllocVaddr(PAGE_SIZE, 0);
+        a = TTOS_AllocVaddr(PAGE_SIZE, 0);
         if (a)
+        {
             ta->addrs[ta->alloc_count++] = a;
+        }
     }
 
     /* 等待所有线程完成分配 */
     simple_barrier_wait(ta->barrier);
 
     /* 阶段二：释放 */
-    for (int i = 0; i < ta->alloc_count; i++)
+    for (i = 0; i < ta->alloc_count; i++)
+    {
         TTOS_FreeVaddr(ta->addrs[i], PAGE_SIZE);
+    }
 
     return NULL;
 }
 
 static void test_parallel_alloc_then_free(void)
 {
+    simple_barrier_t barrier;
+    t2_thread_arg_t  args[T2_THREADS];
+    pthread_t        threads[T2_THREADS];
+    int              total_alloced;
+    TTOS_VaddrStats  stats;
+    int              i;
+
     TEST_SUITE_BEGIN("parallel alloc then parallel free");
 
     TEST_ASSERT(TTOS_VaddrArenaInit(ARENA_BASE, ARENA_SIZE) == 0);
 
-    simple_barrier_t barrier;
     simple_barrier_init(&barrier, T2_THREADS);
 
-    t2_thread_arg_t args[T2_THREADS];
-    pthread_t       threads[T2_THREADS];
-
-    for (int i = 0; i < T2_THREADS; i++)
+    for (i = 0; i < T2_THREADS; i++)
     {
         args[i].barrier = &barrier;
         pthread_create(&threads[i], NULL, t2_worker, &args[i]);
     }
-    for (int i = 0; i < T2_THREADS; i++)
+    for (i = 0; i < T2_THREADS; i++)
+    {
         pthread_join(threads[i], NULL);
+    }
 
     simple_barrier_destroy(&barrier);
 
-    int total_alloced = 0;
-    for (int i = 0; i < T2_THREADS; i++)
+    total_alloced = 0;
+    for (i = 0; i < T2_THREADS; i++)
+    {
         total_alloced += args[i].alloc_count;
+    }
 
     TEST_ASSERT(total_alloced <= T2_THREADS * T2_ALLOCS_EACH);
 
-    TTOS_VaddrStats stats;
     TTOS_VaddrArenaStats(&stats);
     TEST_ASSERT(stats.free_pages == ARENA_PAGES);
 
@@ -201,13 +219,16 @@ typedef struct
 static void *t3_worker(void *arg)
 {
     t3_thread_arg_t *ta = (t3_thread_arg_t *)arg;
+    void            *a;
+    int              i;
+
     ta->count = 0;
 
     simple_barrier_wait(ta->barrier); /* 同步启动 */
 
-    for (int i = 0; i < T3_ALLOCS; i++)
+    for (i = 0; i < T3_ALLOCS; i++)
     {
-        void *a = TTOS_AllocVaddr(2 * PAGE_SIZE, 0);
+        a = TTOS_AllocVaddr(2 * PAGE_SIZE, 0);
         if (a)
         {
             ta->ranges[ta->count].start = (uintptr_t)a;
@@ -227,47 +248,65 @@ static int ranges_overlap(addr_range_t x, addr_range_t y)
 
 static void test_no_overlapping_addresses(void)
 {
+    simple_barrier_t barrier;
+    t3_thread_arg_t  args[T3_THREADS];
+    pthread_t        threads[T3_THREADS];
+    addr_range_t     all[T3_THREADS * T3_ALLOCS];
+    int              total;
+    int              overlaps_found;
+    TTOS_VaddrStats  stats;
+    int              i;
+    int              j;
+
     TEST_SUITE_BEGIN("no overlapping addresses under concurrent load");
 
     TEST_ASSERT(TTOS_VaddrArenaInit(ARENA_BASE, ARENA_SIZE) == 0);
 
-    simple_barrier_t barrier;
     simple_barrier_init(&barrier, T3_THREADS);
 
-    t3_thread_arg_t args[T3_THREADS];
-    pthread_t       threads[T3_THREADS];
-
-    for (int i = 0; i < T3_THREADS; i++)
+    for (i = 0; i < T3_THREADS; i++)
     {
         args[i].barrier = &barrier;
         pthread_create(&threads[i], NULL, t3_worker, &args[i]);
     }
-    for (int i = 0; i < T3_THREADS; i++)
+    for (i = 0; i < T3_THREADS; i++)
+    {
         pthread_join(threads[i], NULL);
+    }
 
     simple_barrier_destroy(&barrier);
 
     /* 收集所有地址范围 */
-    addr_range_t all[T3_THREADS * T3_ALLOCS];
-    int total = 0;
-    for (int i = 0; i < T3_THREADS; i++)
-        for (int j = 0; j < args[i].count; j++)
+    total = 0;
+    for (i = 0; i < T3_THREADS; i++)
+    {
+        for (j = 0; j < args[i].count; j++)
+        {
             all[total++] = args[i].ranges[j];
+        }
+    }
 
     /* 两两检查：不得有页重叠 */
-    int overlaps_found = 0;
-    for (int i = 0; i < total; i++)
-        for (int j = i + 1; j < total; j++)
+    overlaps_found = 0;
+    for (i = 0; i < total; i++)
+    {
+        for (j = i + 1; j < total; j++)
+        {
             if (ranges_overlap(all[i], all[j]))
+            {
                 overlaps_found++;
+            }
+        }
+    }
 
     TEST_ASSERT(overlaps_found == 0);
 
     /* 释放全部 */
-    for (int i = 0; i < total; i++)
+    for (i = 0; i < total; i++)
+    {
         TTOS_FreeVaddr((void *)all[i].start, all[i].pages * PAGE_SIZE);
+    }
 
-    TTOS_VaddrStats stats;
     TTOS_VaddrArenaStats(&stats);
     TEST_ASSERT(stats.free_pages == ARENA_PAGES);
 
