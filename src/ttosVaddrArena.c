@@ -310,6 +310,7 @@ void TTOS_VaddrArenaDestroy(void)
     pthread_mutex_lock(&g_vaddr_arena.lock);
     g_vaddr_arena.seg_list       = NULL;
     g_vaddr_arena.node_free_list = NULL;
+
     /* 持锁期间将 bitmap/node_pool 指针置 NULL 并保存到局部变量。 */
     /* 解锁后其他线程检查 bitmap == NULL 将立即退出，             */
     /* 不会再尝试加锁已销毁的 mutex，避免 UB。                   */

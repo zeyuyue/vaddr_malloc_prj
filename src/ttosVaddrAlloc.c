@@ -197,6 +197,7 @@ void *TTOS_AllocVaddr(size_t size, size_t align)
     }
 
     n_pages     = size_to_pages(size);
+
     /* align 为 0 或等于 PAGE_SIZE 时使用默认页对齐（align_pages = 1） */
     align_pages = (align <= PAGE_SIZE) ? 1u : (align >> PAGE_SHIFT);
 
@@ -310,6 +311,7 @@ T_TTOS_ReturnCode TTOS_FreeVaddr(void *addr, size_t size)
     arena->free_pages += n_pages;
     seg_insert(arena, node);
     seg_merge_adjacent(arena, node);
+
     /* node 可能已在 seg_merge_adjacent 内部归还节点池，此后不得再访问 */
 
     pthread_mutex_unlock(&arena->lock);
