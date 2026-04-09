@@ -158,11 +158,14 @@ void seg_remove(arena_t *arena, free_seg_t *node)
  */
 void seg_merge_adjacent(arena_t *arena, free_seg_t *node)
 {
+    free_seg_t *next;
+    free_seg_t *prev;
+
     /* 尝试与后继节点合并 */
     if (node->next &&
         node->start_page + node->page_count == node->next->start_page)
     {
-        free_seg_t *next = node->next;
+        next = node->next;
         node->page_count += next->page_count;
         seg_remove(arena, next);
         seg_node_free(arena, next);
@@ -172,7 +175,7 @@ void seg_merge_adjacent(arena_t *arena, free_seg_t *node)
     if (node->prev &&
         node->prev->start_page + node->prev->page_count == node->start_page)
     {
-        free_seg_t *prev = node->prev;
+        prev = node->prev;
         prev->page_count += node->page_count;
         seg_remove(arena, node);
         seg_node_free(arena, node);
@@ -216,6 +219,9 @@ static void arena_cleanup(arena_t *arena, int mutex_inited)
  */
 T_TTOS_ReturnCode TTOS_VaddrArenaInit(uintptr_t base, size_t size)
 {
+    free_seg_t *initial;
+    size_t      i;
+
     if (size == 0)
     {
         return TTOS_INVALID_SIZE;
@@ -262,7 +268,7 @@ T_TTOS_ReturnCode TTOS_VaddrArenaInit(uintptr_t base, size_t size)
     }
 
     /* 将所有节点串成空闲链表 */
-    for (size_t i = 0; i < g_vaddr_arena.node_pool_size - 1u; i++)
+    for (i = 0; i < g_vaddr_arena.node_pool_size - 1u; i++)
     {
         g_vaddr_arena.node_pool[i].next = &g_vaddr_arena.node_pool[i + 1u];
     }
@@ -276,7 +282,7 @@ T_TTOS_ReturnCode TTOS_VaddrArenaInit(uintptr_t base, size_t size)
     }
 
     /* 初始状态：整个 arena 是一个连续的空闲段 */
-    free_seg_t *initial = seg_node_alloc(&g_vaddr_arena, 0, g_vaddr_arena.total_pages);
+    initial = seg_node_alloc(&g_vaddr_arena, 0, g_vaddr_arena.total_pages);
     if (!initial)
     {
         arena_cleanup(&g_vaddr_arena, 1);
@@ -293,6 +299,9 @@ T_TTOS_ReturnCode TTOS_VaddrArenaInit(uintptr_t base, size_t size)
  */
 void TTOS_VaddrArenaDestroy(void)
 {
+    uint8_t    *bm;
+    free_seg_t *np;
+
     if (!g_vaddr_arena.bitmap)
     {
         return;
@@ -304,8 +313,8 @@ void TTOS_VaddrArenaDestroy(void)
     /* 持锁期间将 bitmap/node_pool 指针置 NULL 并保存到局部变量。 */
     /* 解锁后其他线程检查 bitmap == NULL 将立即退出，             */
     /* 不会再尝试加锁已销毁的 mutex，避免 UB。                   */
-    uint8_t    *bm = g_vaddr_arena.bitmap;
-    free_seg_t *np = g_vaddr_arena.node_pool;
+    bm = g_vaddr_arena.bitmap;
+    np = g_vaddr_arena.node_pool;
     g_vaddr_arena.bitmap    = NULL;
     g_vaddr_arena.node_pool = NULL;
     pthread_mutex_unlock(&g_vaddr_arena.lock);

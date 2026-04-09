@@ -60,13 +60,16 @@ static size_t size_to_pages(size_t size)
 static free_seg_t *seg_find_fit_aligned(arena_t *arena, size_t n, size_t align_pages,
                                         size_t *out_start)
 {
-    size_t base_pages = arena->base >> PAGE_SHIFT;
+    size_t      base_pages = arena->base >> PAGE_SHIFT;
+    free_seg_t *s;
+    size_t      offset;
+    size_t      p;
 
-    for (free_seg_t *s = arena->seg_list; s; s = s->next)
+    for (s = arena->seg_list; s; s = s->next)
     {
         /* 计算段内第一个满足对齐要求的起始页 */
-        size_t offset = (base_pages + s->start_page) % align_pages;
-        size_t p      = s->start_page + (offset == 0u ? 0u : align_pages - offset);
+        offset = (base_pages + s->start_page) % align_pages;
+        p      = s->start_page + (offset == 0u ? 0u : align_pages - offset);
 
         if (p + n <= s->start_page + s->page_count)
         {
@@ -86,7 +89,9 @@ static free_seg_t *seg_find_fit_aligned(arena_t *arena, size_t n, size_t align_p
  */
 static void bitmap_mark_used(uint8_t *bitmap, size_t start, size_t count)
 {
-    for (size_t i = start; i < start + count; i++)
+    size_t i;
+
+    for (i = start; i < start + count; i++)
     {
         bitmap_set(bitmap, i);
     }
@@ -101,7 +106,9 @@ static void bitmap_mark_used(uint8_t *bitmap, size_t start, size_t count)
  */
 static void bitmap_mark_free(uint8_t *bitmap, size_t start, size_t count)
 {
-    for (size_t i = start; i < start + count; i++)
+    size_t i;
+
+    for (i = start; i < start + count; i++)
     {
         bitmap_clear(bitmap, i);
     }
@@ -171,23 +178,27 @@ static int seg_carve_aligned(arena_t *arena, free_seg_t *seg,
  */
 void *TTOS_AllocVaddr(size_t size, size_t align)
 {
-    arena_t *arena = &g_vaddr_arena;
+    arena_t    *arena = &g_vaddr_arena;
+    size_t      n_pages;
+    size_t      align_pages;
+    size_t      start_page;
+    free_seg_t *seg;
 
     if (!arena->bitmap || size == 0)
     {
         return NULL;
     }
 
-    /* align 非零时须为 PAGE_SIZE 的整数倍且为 2 的幂次；
-     * 违反时直接返回 NULL，不做静默退化以免掩盖调用方错误。 */
+    /* align 非零时须为 PAGE_SIZE 的整数倍且为 2 的幂次； */
+    /* 违反时直接返回 NULL，不做静默退化以免掩盖调用方错误。 */
     if (align != 0 && (align < PAGE_SIZE || (align & (align - 1)) != 0))
     {
         return NULL;
     }
 
-    size_t n_pages     = size_to_pages(size);
+    n_pages     = size_to_pages(size);
     /* align 为 0 或等于 PAGE_SIZE 时使用默认页对齐（align_pages = 1） */
-    size_t align_pages = (align <= PAGE_SIZE) ? 1u : (align >> PAGE_SHIFT);
+    align_pages = (align <= PAGE_SIZE) ? 1u : (align >> PAGE_SHIFT);
 
     pthread_mutex_lock(&arena->lock);
 
@@ -198,8 +209,7 @@ void *TTOS_AllocVaddr(size_t size, size_t align)
         return NULL;
     }
 
-    size_t start_page;
-    free_seg_t *seg = seg_find_fit_aligned(arena, n_pages, align_pages, &start_page);
+    seg = seg_find_fit_aligned(arena, n_pages, align_pages, &start_page);
     if (!seg)
     {
         pthread_mutex_unlock(&arena->lock);
@@ -237,7 +247,12 @@ void *TTOS_AllocVaddr(size_t size, size_t align)
  */
 T_TTOS_ReturnCode TTOS_FreeVaddr(void *addr, size_t size)
 {
-    arena_t *arena = &g_vaddr_arena;
+    arena_t    *arena = &g_vaddr_arena;
+    uintptr_t   vaddr;
+    size_t      n_pages;
+    size_t      start_page;
+    free_seg_t *node;
+    size_t      i;
 
     if (!arena->bitmap)
     {
@@ -254,14 +269,14 @@ T_TTOS_ReturnCode TTOS_FreeVaddr(void *addr, size_t size)
         return TTOS_INVALID_SIZE;
     }
 
-    uintptr_t vaddr = (uintptr_t)addr;
+    vaddr = (uintptr_t)addr;
     if (vaddr < arena->base || (vaddr & (PAGE_SIZE - 1)))
     {
         return TTOS_INVALID_ADDRESS;
     }
 
-    size_t n_pages    = size_to_pages(size);
-    size_t start_page = (vaddr - arena->base) >> PAGE_SHIFT;
+    n_pages    = size_to_pages(size);
+    start_page = (vaddr - arena->base) >> PAGE_SHIFT;
 
     if (start_page + n_pages > arena->total_pages)
     {
@@ -273,7 +288,7 @@ T_TTOS_ReturnCode TTOS_FreeVaddr(void *addr, size_t size)
     /* 双重释放检测：范围内任意页已空闲则拒绝整次操作。           */
     /* 仅检查首页不够：首页可能被其他分配重新占用，从而绕过检测， */
     /* 导致其他活跃分配的位图被静默清零、seg_list 出现重叠段。   */
-    for (size_t i = start_page; i < start_page + n_pages; i++)
+    for (i = start_page; i < start_page + n_pages; i++)
     {
         if (!bitmap_get(arena->bitmap, i))
         {
@@ -284,7 +299,7 @@ T_TTOS_ReturnCode TTOS_FreeVaddr(void *addr, size_t size)
 
     /* 先取节点，成功后再更新位图和计数，保证状态原子一致。                   */
     /* 节点池耗尽时放弃本次释放，避免 bitmap/free_pages 与 seg_list 失步。 */
-    free_seg_t *node = seg_node_alloc(arena, start_page, n_pages);
+    node = seg_node_alloc(arena, start_page, n_pages);
     if (!node)
     {
         pthread_mutex_unlock(&arena->lock);

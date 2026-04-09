@@ -59,6 +59,30 @@ typedef struct rb_node
 枚举定义位于 `include/ttosVaddrAlloc.h`，此处不再重复，以头文件为唯一真值来源。
 常用返回码：`TTOS_OK`(0)、`TTOS_FAIL`(1)、`TTOS_INVALID_ADDRESS`(4)、`TTOS_INVALID_STATE`(6)、`TTOS_UNSATISFIED`(8)、`TTOS_INVALID_SIZE`(11)、`TTOS_INTERNAL_ERROR`(13)、`TTOS_INVALID_ALIGNED`(14)。
 
+### 变量声明位置
+
+函数内所有局部变量**必须**在函数体最顶部集中声明，在任何可执行语句之前。`for` 循环也不得在 `for (type var = ...)` 中声明变量，须提前在函数顶部声明。
+
+```c
+/* 正确 */
+void foo(void)
+{
+    int    x;
+    size_t i;
+
+    x = bar();
+    for (i = 0; i < 10; i++) { ... }
+}
+
+/* 错误：变量在语句中间声明 */
+void foo(void)
+{
+    int x = bar();
+    /* ... 其他语句 ... */
+    for (size_t i = 0; i < 10; i++) { ... }  /* 禁止 */
+}
+```
+
 ### 大括号风格
 
 - 使用 Allman 风格，所有大括号另起一行
