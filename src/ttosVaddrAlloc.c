@@ -270,9 +270,9 @@ T_TTOS_ReturnCode TTOS_FreeVaddr(void *addr, size_t size)
 
     pthread_mutex_lock(&arena->lock);
 
-    /* 双重释放检测：范围内任意页已空闲则拒绝整次操作。
-     * 仅检查首页不够：首页可能被其他分配重新占用，从而绕过检测，
-     * 导致其他活跃分配的位图被静默清零、seg_list 出现重叠段。 */
+    /* 双重释放检测：范围内任意页已空闲则拒绝整次操作。           */
+    /* 仅检查首页不够：首页可能被其他分配重新占用，从而绕过检测， */
+    /* 导致其他活跃分配的位图被静默清零、seg_list 出现重叠段。   */
     for (size_t i = start_page; i < start_page + n_pages; i++)
     {
         if (!bitmap_get(arena->bitmap, i))
@@ -282,10 +282,8 @@ T_TTOS_ReturnCode TTOS_FreeVaddr(void *addr, size_t size)
         }
     }
 
-    /*
-     * 先取节点，成功后再更新位图和计数，保证状态原子一致。
-     * 节点池耗尽时放弃本次释放，避免 bitmap/free_pages 与 seg_list 失步。
-     */
+    /* 先取节点，成功后再更新位图和计数，保证状态原子一致。                   */
+    /* 节点池耗尽时放弃本次释放，避免 bitmap/free_pages 与 seg_list 失步。 */
     free_seg_t *node = seg_node_alloc(arena, start_page, n_pages);
     if (!node)
     {
