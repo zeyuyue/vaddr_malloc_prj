@@ -52,8 +52,8 @@ static void simple_barrier_destroy(simple_barrier_t *b)
 }
 
 #define PAGE_SIZE   TTOS_PAGE_SIZE
-#define ARENA_BASE  0x20000000UL
-#define ARENA_PAGES 1024U
+#define ARENA_BASE  (0x20000000UL)
+#define ARENA_PAGES (1024U)
 #define ARENA_SIZE  (ARENA_PAGES * PAGE_SIZE)
 
 /* -----------------------------------------------------------------------
@@ -63,8 +63,8 @@ static void simple_barrier_destroy(simple_barrier_t *b)
  * 全部线程结束后 arena 必须完全归还。
  * --------------------------------------------------------------------- */
 
-#define T1_THREADS    8
-#define T1_ITERATIONS 200
+#define T1_THREADS    (8)
+#define T1_ITERATIONS (200)
 
 static void *t1_worker(void *arg)
 {
@@ -114,8 +114,8 @@ static void test_concurrent_alloc_free(void)
  * 最终 arena 必须完全归还。
  * --------------------------------------------------------------------- */
 
-#define T2_THREADS      4
-#define T2_ALLOCS_EACH  8
+#define T2_THREADS      (4)
+#define T2_ALLOCS_EACH  (8)
 
 typedef struct
 {
@@ -200,8 +200,8 @@ static void test_parallel_alloc_then_free(void)
  * 多线程同时分配，收集所有地址范围后两两检查不得有页重叠。
  * --------------------------------------------------------------------- */
 
-#define T3_THREADS  6
-#define T3_ALLOCS   16
+#define T3_THREADS  (6)
+#define T3_ALLOCS   (16)
 
 typedef struct
 {

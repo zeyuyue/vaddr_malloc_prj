@@ -99,19 +99,19 @@ extern arena_t g_vaddr_arena;
 /* 将第 page 页标记为已分配 */
 static inline void bitmap_set(uint8_t *bm, size_t page)
 {
-    bm[page >> 3] |= (uint8_t)(1u << (page & 7u));
+    bm[page >> 3] |= (uint8_t)(1U << (page & 7U));
 }
 
 /* 将第 page 页标记为空闲 */
 static inline void bitmap_clear(uint8_t *bm, size_t page)
 {
-    bm[page >> 3] &= (uint8_t)(~(1u << (page & 7u)));
+    bm[page >> 3] &= (uint8_t)(~(1U << (page & 7U)));
 }
 
 /* 查询第 page 页是否已分配，返回非零表示已分配 */
 static inline int bitmap_get(const uint8_t *bm, size_t page)
 {
-    return (bm[page >> 3] >> (page & 7u)) & 1;
+    return (bm[page >> 3] >> (page & 7U)) & 1;
 }
 
 /* -----------------------------------------------------------------------

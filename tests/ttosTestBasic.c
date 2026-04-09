@@ -4,8 +4,8 @@
 #include "ttosTestFramework.h"
 
 #define PAGE_SIZE   TTOS_PAGE_SIZE
-#define ARENA_BASE  0x10000000UL
-#define ARENA_PAGES 256U
+#define ARENA_BASE  (0x10000000UL)
+#define ARENA_PAGES (256U)
 #define ARENA_SIZE  (ARENA_PAGES * PAGE_SIZE)
 
 /* addr 是否落在 arena 管理范围内 */

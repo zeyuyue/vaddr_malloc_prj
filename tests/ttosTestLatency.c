@@ -32,8 +32,8 @@
 #include "ttosTestFramework.h"
 
 #define PAGE_SIZE   TTOS_PAGE_SIZE
-#define ARENA_BASE  0x10000000UL
-#define ARENA_PAGES 4096U
+#define ARENA_BASE  (0x10000000UL)
+#define ARENA_PAGES (4096U)
 #define ARENA_SIZE  (ARENA_PAGES * PAGE_SIZE)
 
 /* 获取当前时间戳（纳秒） */
@@ -51,7 +51,7 @@ static uint64_t now_ns(void)
  * 这是最佳情况——空闲段链表只有一个节点，首次适配 O(1)。
  * --------------------------------------------------------------------- */
 
-#define S1_COUNT 512
+#define S1_COUNT (512)
 
 static void test_latency_sequential_alloc(void)
 {
@@ -111,8 +111,8 @@ static void test_latency_sequential_alloc(void)
  * 这是最坏情况——空闲段链表节点数最多，首次适配搜索最长。
  * --------------------------------------------------------------------- */
 
-#define S2_TOTAL  1024
-#define S2_MEASURE 256
+#define S2_TOTAL  (1024)
+#define S2_MEASURE (256)
 
 static void test_latency_fragmented_alloc(void)
 {
@@ -189,7 +189,7 @@ static void test_latency_fragmented_alloc(void)
  * 重复多轮取统计。
  * --------------------------------------------------------------------- */
 
-#define S3_ROUNDS 200
+#define S3_ROUNDS (200)
 
 static void test_latency_free_coalesce(void)
 {
@@ -251,7 +251,7 @@ static void test_latency_free_coalesce(void)
  * 与无对齐分配对比，观察对齐搜索的额外开销。
  * --------------------------------------------------------------------- */
 
-#define S4_COUNT 64
+#define S4_COUNT (64)
 
 static void test_latency_aligned_alloc(void)
 {

@@ -28,8 +28,8 @@
 #include <stdint.h>
 
 /* 页大小与移位常量（对外公开，调用方需要据此进行对齐） */
-#define TTOS_PAGE_SIZE    4096U
-#define TTOS_PAGE_SHIFT   12U
+#define TTOS_PAGE_SIZE    (4096U)
+#define TTOS_PAGE_SHIFT   (12U)
 
 /* 所有 TTOS_ 前缀公共 API 的统一返回码类型 */
 typedef enum

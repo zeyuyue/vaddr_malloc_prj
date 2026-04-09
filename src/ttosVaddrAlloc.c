@@ -44,7 +44,7 @@
 static size_t size_to_pages(size_t size)
 {
     /* 等价于 ceil(size / PAGE_SIZE)，避免 size + PAGE_SIZE - 1 在极大值时溢出 */
-    return ((size - 1u) >> PAGE_SHIFT) + 1u;
+    return ((size - 1U) >> PAGE_SHIFT) + 1U;
 }
 
 /**
@@ -69,7 +69,7 @@ static free_seg_t *seg_find_fit_aligned(arena_t *arena, size_t n, size_t align_p
     {
         /* 计算段内第一个满足对齐要求的起始页 */
         offset = (base_pages + s->start_page) % align_pages;
-        p      = s->start_page + (offset == 0u ? 0u : align_pages - offset);
+        p      = s->start_page + (offset == 0U ? 0U : align_pages - offset);
 
         if (p + n <= s->start_page + s->page_count)
         {
@@ -199,7 +199,7 @@ void *TTOS_AllocVaddr(size_t size, size_t align)
     n_pages     = size_to_pages(size);
 
     /* align 为 0 或等于 PAGE_SIZE 时使用默认页对齐（align_pages = 1） */
-    align_pages = (align <= PAGE_SIZE) ? 1u : (align >> PAGE_SHIFT);
+    align_pages = (align <= PAGE_SIZE) ? 1U : (align >> PAGE_SHIFT);
 
     pthread_mutex_lock(&arena->lock);
 

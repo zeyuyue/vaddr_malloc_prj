@@ -34,7 +34,7 @@
  * 最坏情况：页交替占用时最多产生 total_pages/2 个不连续空闲段，
  * 额外 +2 保留初始整段节点及合并过程中的临时余量。
  */
-#define NODE_POOL_SIZE(total_pages)  ((total_pages) / 2u + 2u)
+#define NODE_POOL_SIZE(total_pages)  ((total_pages) / 2U + 2U)
 /************************类型定义******************************/
 /************************外部声明******************************/
 /************************前向声明******************************/
@@ -247,7 +247,7 @@ T_TTOS_ReturnCode TTOS_VaddrArenaInit(uintptr_t base, size_t size)
 
     g_vaddr_arena.base         = base;
     g_vaddr_arena.total_pages  = size >> PAGE_SHIFT;
-    g_vaddr_arena.bitmap_bytes = (g_vaddr_arena.total_pages + 7u) / 8u;
+    g_vaddr_arena.bitmap_bytes = (g_vaddr_arena.total_pages + 7U) / 8U;
     g_vaddr_arena.free_pages   = g_vaddr_arena.total_pages;
 
     g_vaddr_arena.bitmap = calloc(g_vaddr_arena.bitmap_bytes, 1);
@@ -268,11 +268,11 @@ T_TTOS_ReturnCode TTOS_VaddrArenaInit(uintptr_t base, size_t size)
     }
 
     /* 将所有节点串成空闲链表 */
-    for (i = 0; i < g_vaddr_arena.node_pool_size - 1u; i++)
+    for (i = 0; i < g_vaddr_arena.node_pool_size - 1U; i++)
     {
-        g_vaddr_arena.node_pool[i].next = &g_vaddr_arena.node_pool[i + 1u];
+        g_vaddr_arena.node_pool[i].next = &g_vaddr_arena.node_pool[i + 1U];
     }
-    g_vaddr_arena.node_pool[g_vaddr_arena.node_pool_size - 1u].next = NULL;
+    g_vaddr_arena.node_pool[g_vaddr_arena.node_pool_size - 1U].next = NULL;
     g_vaddr_arena.node_free_list = &g_vaddr_arena.node_pool[0];
 
     if (pthread_mutex_init(&g_vaddr_arena.lock, NULL) != 0)
