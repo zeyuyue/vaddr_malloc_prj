@@ -51,10 +51,10 @@ static void simple_barrier_destroy(simple_barrier_t *b)
     pthread_cond_destroy(&b->cond);
 }
 
+#define PAGE_SIZE   TTOS_PAGE_SIZE
 #define ARENA_BASE  0x20000000UL
 #define ARENA_PAGES 1024U
-#define ARENA_SIZE  (ARENA_PAGES * 4096U)
-#define PAGE_SIZE   4096U
+#define ARENA_SIZE  (ARENA_PAGES * PAGE_SIZE)
 
 /* -----------------------------------------------------------------------
  * 测试一：多线程交替 alloc/free

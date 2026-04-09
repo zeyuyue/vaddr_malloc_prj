@@ -56,7 +56,9 @@ free_seg_t *seg_node_alloc(arena_t *arena, size_t start_page, size_t page_count)
 {
     free_seg_t *node = arena->node_free_list;
     if (!node)
+    {
         return NULL;
+    }
 
     arena->node_free_list = node->next;
     node->start_page = start_page;
@@ -76,7 +78,9 @@ free_seg_t *seg_node_alloc(arena_t *arena, size_t start_page, size_t page_count)
 void seg_node_free(arena_t *arena, free_seg_t *node)
 {
     if (!node)
+    {
         return;
+    }
     node->next = arena->node_free_list;
     node->prev = NULL;
     arena->node_free_list = node;
@@ -104,12 +108,18 @@ void seg_insert(arena_t *arena, free_seg_t *node)
     node->next = cur;
 
     if (prev)
+    {
         prev->next = node;
+    }
     else
+    {
         arena->seg_list = node;
+    }
 
     if (cur)
+    {
         cur->prev = node;
+    }
 }
 
 /**
@@ -122,12 +132,18 @@ void seg_insert(arena_t *arena, free_seg_t *node)
 void seg_remove(arena_t *arena, free_seg_t *node)
 {
     if (node->prev)
+    {
         node->prev->next = node->next;
+    }
     else
+    {
         arena->seg_list = node->next;
+    }
 
     if (node->next)
+    {
         node->next->prev = node->prev;
+    }
 
     node->prev = NULL;
     node->next = NULL;
@@ -174,7 +190,9 @@ void seg_merge_adjacent(arena_t *arena, free_seg_t *node)
 static void arena_cleanup(arena_t *arena, int mutex_inited)
 {
     if (mutex_inited)
+    {
         pthread_mutex_destroy(&arena->lock);
+    }
     free(arena->node_pool);
     free(arena->bitmap);
     memset(arena, 0, sizeof(arena_t));
@@ -199,19 +217,27 @@ static void arena_cleanup(arena_t *arena, int mutex_inited)
 T_TTOS_ReturnCode TTOS_VaddrArenaInit(uintptr_t base, size_t size)
 {
     if (size == 0)
+    {
         return TTOS_INVALID_SIZE;
+    }
 
     if ((base & (PAGE_SIZE - 1)) || (size & (PAGE_SIZE - 1)))
+    {
         return TTOS_INVALID_ALIGNED;
+    }
 
     /* base + size 不得回绕 uintptr_t，否则高地址页的虚拟地址会溢出为 0 */
     /* base 为 0 时首页地址 == NULL，与分配失败返回值冲突，须拒绝 */
     if (base == 0 || base + size < base)
+    {
         return TTOS_INVALID_ADDRESS;
+    }
 
     /* 若已初始化则先清理，支持重新初始化 */
     if (g_vaddr_arena.bitmap)
+    {
         TTOS_VaddrArenaDestroy();
+    }
 
     g_vaddr_arena.base         = base;
     g_vaddr_arena.total_pages  = size >> PAGE_SHIFT;
@@ -237,7 +263,9 @@ T_TTOS_ReturnCode TTOS_VaddrArenaInit(uintptr_t base, size_t size)
 
     /* 将所有节点串成空闲链表 */
     for (size_t i = 0; i < g_vaddr_arena.node_pool_size - 1u; i++)
+    {
         g_vaddr_arena.node_pool[i].next = &g_vaddr_arena.node_pool[i + 1u];
+    }
     g_vaddr_arena.node_pool[g_vaddr_arena.node_pool_size - 1u].next = NULL;
     g_vaddr_arena.node_free_list = &g_vaddr_arena.node_pool[0];
 
@@ -266,7 +294,9 @@ T_TTOS_ReturnCode TTOS_VaddrArenaInit(uintptr_t base, size_t size)
 void TTOS_VaddrArenaDestroy(void)
 {
     if (!g_vaddr_arena.bitmap)
+    {
         return;
+    }
 
     pthread_mutex_lock(&g_vaddr_arena.lock);
     g_vaddr_arena.seg_list       = NULL;
@@ -298,10 +328,14 @@ void TTOS_VaddrArenaDestroy(void)
 T_TTOS_ReturnCode TTOS_VaddrArenaStats(TTOS_VaddrStats *stats)
 {
     if (!stats)
+    {
         return TTOS_INVALID_ADDRESS;
+    }
 
     if (!g_vaddr_arena.bitmap)
+    {
         return TTOS_INVALID_STATE;
+    }
 
     pthread_mutex_lock(&g_vaddr_arena.lock);
     stats->total_pages = g_vaddr_arena.total_pages;

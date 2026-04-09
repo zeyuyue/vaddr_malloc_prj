@@ -87,7 +87,9 @@ static free_seg_t *seg_find_fit_aligned(arena_t *arena, size_t n, size_t align_p
 static void bitmap_mark_used(uint8_t *bitmap, size_t start, size_t count)
 {
     for (size_t i = start; i < start + count; i++)
+    {
         bitmap_set(bitmap, i);
+    }
 }
 
 /**
@@ -100,7 +102,9 @@ static void bitmap_mark_used(uint8_t *bitmap, size_t start, size_t count)
 static void bitmap_mark_free(uint8_t *bitmap, size_t start, size_t count)
 {
     for (size_t i = start; i < start + count; i++)
+    {
         bitmap_clear(bitmap, i);
+    }
 }
 
 /**
@@ -127,7 +131,9 @@ static int seg_carve_aligned(arena_t *arena, free_seg_t *seg,
     {
         back = seg_node_alloc(arena, start_page + n, back_pages);
         if (!back)
+        {
             return -1;
+        }
     }
 
     seg_remove(arena, seg);
@@ -146,7 +152,9 @@ static int seg_carve_aligned(arena_t *arena, free_seg_t *seg,
     }
 
     if (back)
+    {
         seg_insert(arena, back);
+    }
 
     return 0;
 }
@@ -166,12 +174,16 @@ void *TTOS_AllocVaddr(size_t size, size_t align)
     arena_t *arena = &g_vaddr_arena;
 
     if (!arena->bitmap || size == 0)
+    {
         return NULL;
+    }
 
     /* align 非零时须为 PAGE_SIZE 的整数倍且为 2 的幂次；
      * 违反时直接返回 NULL，不做静默退化以免掩盖调用方错误。 */
     if (align != 0 && (align < PAGE_SIZE || (align & (align - 1)) != 0))
+    {
         return NULL;
+    }
 
     size_t n_pages     = size_to_pages(size);
     /* align 为 0 或等于 PAGE_SIZE 时使用默认页对齐（align_pages = 1） */
@@ -228,23 +240,33 @@ T_TTOS_ReturnCode TTOS_FreeVaddr(void *addr, size_t size)
     arena_t *arena = &g_vaddr_arena;
 
     if (!arena->bitmap)
+    {
         return TTOS_INVALID_STATE;
+    }
 
     if (!addr)
+    {
         return TTOS_INVALID_ADDRESS;
+    }
 
     if (size == 0)
+    {
         return TTOS_INVALID_SIZE;
+    }
 
     uintptr_t vaddr = (uintptr_t)addr;
     if (vaddr < arena->base || (vaddr & (PAGE_SIZE - 1)))
+    {
         return TTOS_INVALID_ADDRESS;
+    }
 
     size_t n_pages    = size_to_pages(size);
     size_t start_page = (vaddr - arena->base) >> PAGE_SHIFT;
 
     if (start_page + n_pages > arena->total_pages)
+    {
         return TTOS_INVALID_ADDRESS;
+    }
 
     pthread_mutex_lock(&arena->lock);
 

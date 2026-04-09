@@ -40,7 +40,7 @@ make clean    # 清理产物
 ### 命名规范
 
 - 对外公共 API：`TTOS_` 前缀 + 大驼峰，例如 `TTOS_AllocVaddr`
-- 内部模块函数：小驼峰，例如 `vaddrAlloc`
+- 内部模块函数：`snake_case`，例如 `seg_node_alloc`
 - 局部变量：`snake_case`，例如 `block_size`
 - 宏和常量：`UPPER_CASE`，例如 `PAGE_SIZE_4K`
 - 结构体：tag 与 typedef 均使用 `snake_case`，typedef 以 `_t` 结尾
@@ -54,80 +54,15 @@ typedef struct rb_node
 ```
 
 ### 函数返回码风格
-TTOS_前缀的给应用的函数使用该套返回码
-```c
-/* 所有API的返回值类型 */
-typedef enum
-{
-    /* 操作成功 */
-    TTOS_OK = 0,
-    /* 操作失败 */
-    TTOS_FAIL = 1,
-    /* 无效ID */
-    TTOS_INVALID_ID = 2,
-    /* 无效名字 */
-    TTOS_INVALID_NAME = 3,
-    /* 无效地址 */
-    TTOS_INVALID_ADDRESS = 4,
-    /* 无效时间 */
-    TTOS_INVALID_TIME = 5,
-    /* 无效状态 */
-    TTOS_INVALID_STATE = 6,
-    /* 无效动作 */
-    TTOS_INVALID_TYPE = 7,
-    /* 没有请求到资源 */
-    TTOS_UNSATISFIED = 8,
-    /*无效的用户*/
-    TTOS_INVALID_USER= 9,
-    /*在中断中处理程序中执行*/
-    TTOS_CALLED_FROM_ISR= 10,
-    /*无效的大小*/
-    TTOS_INVALID_SIZE =11,
-    /* 超时 */
-    TTOS_TIMEOUT = 12,
-    /* 内部错误*/
-    TTOS_INTERNAL_ERROR = 13,  
-    /*无效的对齐 */
-    TTOS_INVALID_ALIGNED = 14,
-    /* 数值无效 */
-    TTOS_INVALID_NUMBER = 15,  
-    /* 消息太多 */
-    TTOS_TOO_MANY = 16, 
-    /* 对象已经被删除了 */
-    TTOS_OBJECT_WAS_DELETED = 17,
-    /* 无效的属性 */
-    TTOS_INVALID_ATTRIBUTE = 18,
-    /*无效的优先级 */
-    TTOS_INVALID_PRIORITY = 19,
-    /* 非资源拥有者 */
-    TTOS_NOT_OWNER_OF_RESOURCE = 20,
-    /* 资源正在被使用中 */
-    TTOS_RESOURCE_IN_USE = 21,
-    /* 对象版本不匹配 */
-    TTOS_INVAILD_VERSION = 22,
-    /*操作被屏蔽*/
-    TTOS_MASKED = 23,    
-    /*无效的索引*/
-    TTOS_INVALID_INDEX = 24,    
-    /*无效的系统调用*/
-    TTOS_INVALID_SYSCALL = 25,    
-    /*不支持互斥信号量嵌套获取*/
-    TTOS_MUTEX_NESTING_NOT_ALLOWED = 26,  
-    /*尝试获取互斥信号量的任务优先级高于当前互斥信号量天花板优先级*/
-    TTOS_MUTEX_CEILING_VIOLATED = 27,  
-    /*互斥信号量嵌套层数超出最大允许值*/
-    TTOS_MUTEX_NEST_OVERFLOW = 28,  
-    /* 对象已经被取消了 */
-    TTOS_OBJECT_WAS_CANCELED = 29,
-    /* 等待对象被信号中断 */
-    TTOS_SIGNAL_INTR = 30,  
-}T_TTOS_ReturnCode;
 
-```
+`TTOS_` 前缀的对外 API 统一使用 `T_TTOS_ReturnCode` 枚举作为返回值类型。
+枚举定义位于 `include/ttosVaddrAlloc.h`，此处不再重复，以头文件为唯一真值来源。
+常用返回码：`TTOS_OK`(0)、`TTOS_FAIL`(1)、`TTOS_INVALID_ADDRESS`(4)、`TTOS_INVALID_STATE`(6)、`TTOS_UNSATISFIED`(8)、`TTOS_INVALID_SIZE`(11)、`TTOS_INTERNAL_ERROR`(13)、`TTOS_INVALID_ALIGNED`(14)。
 
 ### 大括号风格
 
-使用 Allman 风格，所有大括号另起一行：
+- 使用 Allman 风格，所有大括号另起一行
+- `if`、`for`、`while` 语句不得省略大括号，即使只有一条语句
 
 ```c
 if (condition)
@@ -135,6 +70,23 @@ if (condition)
     do_something();
 }
 ```
+
+### 注释风格
+
+- 函数注释使用 Doxygen 格式：
+
+```c
+/**
+ * @brief 简要说明
+ *
+ * @param[in]     name  描述
+ * @param[out]    name  描述
+ * @param[in,out] name  描述
+ * @return 描述
+ */
+```
+
+- 多行注释每一行都要用 `/* */` 框起来，不使用 `//` 风格
 
 ### 文件头格式
 
@@ -153,12 +105,12 @@ if (condition)
 /*
  * @file:  ttosVaddrWorkspace.c
  * @brief:
- *       <li>ttos逻辑地址空间管理。 </li>
+ *       <li>ttos逻辑地址空间管理。</li>
  */
 
 /*
  * @brief:
- *       <li>该模块提供ttos逻辑地址空间管理，提供逻辑地址空间分配相关接口 。</li>
+ *       <li>该模块提供ttos逻辑地址空间管理，提供逻辑地址空间分配相关接口。</li>
  */
 
 /************************头 文 件******************************/
@@ -171,24 +123,12 @@ if (condition)
 /************************全局变量******************************/
 /************************实   现*******************************/
 ```
-前向声明区只列出确实需要提前声明的函数，调用顺序已在定义之后的无需声明。
 
-### 函数注释
-
-```c
-/**
- * @brief
- *
- * @param[in]  name  description
- * @param[out] name  description
- * @param[in,out] name  description
- * @return description
- */
-```
+- 前向声明区只列出确实需要提前声明的函数，调用顺序已在定义之后的无需声明
 
 ## 核心约定
 
-- 分配的最小对齐为 4K（页对齐）
+- 分配的最小对齐为 4K（页对齐），`TTOS_PAGE_SIZE` 和 `TTOS_PAGE_SHIFT` 在公共头文件 `ttosVaddrAlloc.h` 中定义，内部使用 `PAGE_SIZE`/`PAGE_SHIFT` 宏别名
 - 使用 POSIX 及 pthread 接口，支持多任务并发
 - 错误处理：失败时返回 `NULL`，库代码禁止调用 `abort`/`exit`
 - 使用模块内全局 `arena_t` 变量管理虚拟地址空间，API 不通过参数传递句柄
@@ -196,10 +136,13 @@ if (condition)
 - 实现逻辑中优先考虑确定性的实时性和多任务场景
 - `TTOS_AllocVaddr` 接口签名固定为 `void *TTOS_AllocVaddr(size_t size, size_t align)`，返回分配到的虚拟地址（失败返回 `NULL`），禁止修改为返回错误码或增减参数
 - `TTOS_AllocVaddr` 的 `align` 参数须为 `PAGE_SIZE`（4096）的 2 的幂次倍，或传 `0` 表示默认页对齐；不满足时返回 `NULL`
+- `TTOS_FreeVaddr` 接口签名固定为 `T_TTOS_ReturnCode TTOS_FreeVaddr(void *addr, size_t size)`，调用方须传入与分配时完全一致的 `addr` 和 `size`，禁止修改为 `void` 返回或增减参数
 
 ## 工作流
 
-- 每次修改代码后必须执行 `git commit` 提交，message 使用中文书写
+- 每次修改后不要自动调用测试用例去验证
+- 每次修改代码后不要自动 `git commit` 提交
+- 提交 `git commit` 时，message 使用中文书写
 
 ## 文档约束
 
@@ -213,4 +156,3 @@ if (condition)
 - 须覆盖多任务并发场景，使用 pthread 模拟
 - 提交前须通过 Valgrind / ASan 检查，不得有内存错误
 - 增加接口响应时间测试，目的是确定实时性
-
